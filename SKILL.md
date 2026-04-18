@@ -1,292 +1,289 @@
 ---
 name: self-distill
 description: >
-  Personal conversation distillation system. Records, analyzes, and distills your AI conversations
-  to automatically discover and generate personalized skills from your real behavior patterns.
-  Contains three sub-commands:
-  - /self-distill record: Script directly parses JSONL to archive the current conversation — zero tokens, verbatim accuracy
-  - /self-distill extract: Analyzes all archived sessions, identifies high-frequency patterns, outputs full skill candidates sorted by demand strength
-  - /self-distill apply: Turns confirmed candidates directly into usable SKILL.md files
-  Trigger this skill when the user says:
-  "self-distill", "record", "extract", "archive conversation", "save this conversation",
-  "distill my skills", "distill history", "analyze my conversations", "analyze my habits",
-  "discover what skills I need", "generate my skills", "review past conversations".
-  Do NOT trigger when the user is only discussing skill concepts or asking how to write a SKILL.md
-  (that is skill-creator's domain).
+  个人对话蒸馏系统。用于记录、分析和提炼你与 AI 的对话，从你真实的行为模式中自动发现并生成个性化 skill。
+  包含三个子命令：
+  - /self-distill record（记录）：脚本直接解析 JSONL 存档当前对话，零 token，精确到字
+  - /self-distill extract（提炼）：分析所有历史记录，统计高频模式，输出 top-k skill 候选
+  - /self-distill apply（应用）：将认可的 skill 候选直接生成可用的 SKILL.md 文件
+  当用户说以下内容时，务必调用此 skill：
+  "self-distill"、"record"、"extract"、"记录对话"、"存档对话"、"保存这次对话"、
+  "蒸馏我的 skill"、"提炼历史"、"提炼对话"、"分析我的对话"、"分析我的习惯"、
+  "发现我需要什么 skill"、"生成我的 skill"、"整理过去的对话"。
+  不要在用户只是讨论 skill 概念、或询问如何写 SKILL.md 时触发（那是 skill-creator 的范围）。
 disable-model-invocation: false
 ---
 
-# Self-Distill: Personal Conversation Distillation System
+# Self-Distill：个人对话蒸馏系统
 
-## Mode Routing
+## 模式路由
 
-On invocation, identify the sub-command keyword first:
+用户调用时，先识别子命令关键词：
 
-| User says | Mode |
-|-----------|------|
-| `record` / `create` / `archive` | → [RECORD MODE] |
-| `extract` / `distill` / `analyze` | → [EXTRACT MODE] |
-| `apply` / `generate skill` | → [APPLY MODE] |
-| No sub-command | → Show help + ask for intent |
-
----
-
-## Environment Detection
-
-Before executing any mode, determine the current environment:
-
-| Signal | Environment | Behavior |
-|--------|-------------|----------|
-| bash tool available and `~/.claude/` accessible | **Claude Code** | Read/write local files |
-| No bash tool, or user explicitly passes `--output print` | **Web / print mode** | Output structured text directly in conversation |
-
-The user can switch to print mode at any time with `--output print`, or force file mode with `--output file`.
+| 用户说 | 执行模式 |
+|--------|---------|
+| `record` / `create` / `记录` / `存档` | → [RECORD 模式] |
+| `extract` / `提炼` / `蒸馏` / `分析` | → [EXTRACT 模式] |
+| `apply` / `应用` / `生成 skill` | → [APPLY 模式] |
+| 无子命令 | → 展示帮助 + 询问意图 |
 
 ---
 
-## [RECORD MODE]: Archive the current conversation
+## 环境检测
 
-**Goal**: Precisely archive the complete conversation of the current session, preserving full context.
+在执行任何模式前，先判断当前运行环境：
 
-### Claude Code environment
+| 判断依据 | 环境 | 行为 |
+|---------|------|------|
+| bash 工具可用，且能访问 `~/.claude/` | **Claude Code** | 读写本地文件 |
+| 无 bash 工具，或用户显式传入 `--output print` | **Web / 输出模式** | 直接在对话中输出结构化文本 |
 
-1. **Determine topic**: Infer from conversation content (1–4 words, hyphen-separated). Use it directly when clear; only ask the user if the topic is ambiguous or has multiple reasonable options.
+用户也可以随时用 `--output print` 强制切换到输出模式，或用 `--output file` 强制写文件模式。
 
-2. **Run the script** (zero AI involvement, pure script extraction):
+---
+
+## [RECORD 模式]：记录当前对话
+
+**目标**：将当前 session 的完整对话精确存档，避免语境缺失。
+
+### Claude Code 环境
+
+1. **确定 topic**：根据对话内容推断（1-4 个词，连字符连接）。topic 明确具体时直接使用，无需确认；只在 topic 模糊或有多个合理选项时才询问用户。
+
+2. **运行脚本**（零 AI 介入，纯脚本提取）：
    ```bash
    python3 ~/.claude/skills/self-distill/scripts/record.py \
-     --project <current project cwd> \
+     --project <当前项目的 cwd> \
      --topic <topic> \
-     [--positive | --negative]  # optional, defaults to neutral
+     [--positive | --negative]  # 可选，默认 neutral
    ```
-   Add the corresponding flag when the user explicitly mentions a good or bad experience; omit it otherwise.
-   The script automatically: extracts user messages verbatim from JSONL (filtering system tags) + full assistant text, writes to `~/.claude/distill-logs/YYYY-MM-DD_HH-MM_<topic>.md`, and prints the output path.
+   用户主动提到体验好或体验差时，自动加对应 flag；未提及则省略。
+   脚本自动：从 JSONL 精确提取用户原文（过滤系统标签）+ assistant 原文，写入 `~/.claude/distill-logs/YYYY-MM-DD_HH-MM_<topic>.md`，输出文件路径。
 
-3. **Inform the user** of the saved path. Done — no AI needs to read any content.
+3. **告知用户**保存路径，完成。无需 AI 读取任何内容。
 
-> Summarization and pattern analysis happen in the extract phase. Record only archives.
+> 摘要和模式分析在 extract 阶段完成，record 只做存档。
 
-### Web environment (print mode)
+### Web 环境（输出模式）
 
-Output the complete session log directly in the conversation, in the same format as the file version (see `references/log-format.md`). The user copies and saves it anywhere (Notion, local file, notes app, etc.).
+直接在对话中输出完整的 session 记录文本，格式与文件版完全一致（见 `references/log-format.md`），用户自行复制保存到任意位置（Notion、本地文件、备忘录等）。
 
-After output, prompt:
-> "This is the complete record of this conversation — copy and save it. Next time you run `/self-distill extract --input <paste content or file path>`, pass it as input to include it in the analysis."
+输出完成后提示：
+> "以上是本次对话的完整记录，可以复制保存。下次运行 `/self-distill extract --input <粘贴内容或文件路径>` 时将其作为输入即可纳入分析。"
 
 ---
 
-## [EXTRACT MODE]: Distill high-frequency skill needs
+## [EXTRACT 模式]：蒸馏高频 skill 需求
 
-**Goal**: Read all archived sessions, analyze your behavior patterns, output top-k real skill candidates.
+**目标**：读取所有历史记录，分析你的行为模式，输出 top-k 个真实 skill 候选。
 
-> ⚠️ **Check context state before running**: extract is a cross-conversation meta-analysis, naturally suited to a fresh session.
-> If the current conversation has substantial content (noticeable compaction, or many turns), proactively prompt:
-> "extract is recommended in a new conversation to ensure sufficient context budget. Continue anyway?"
-> Proceed only after the user confirms.
+> ⚠️ **执行前先检查 context 状态**：extract 是跨对话的元分析，天然适合在全新 session 里运行。
+> 如果当前对话已经进行了相当内容（明显有过 compact，或对话轮次较多），应主动提示：
+> "extract 建议在新的对话中运行，以保证分析有充足的 context 预算。是否继续？"
+> 用户确认后再执行。
 
-### Parameters
+### 参数说明
 
 ```
-/self-distill extract [--input <path>] [--full]
+/self-distill extract [--input <路径>] [--full]
 ```
 
-| Parameter | Description | Default |
-|-----------|-------------|---------|
-| `--input <path>` | Read additional external conversation files (txt/md); supports single file or directory | distill-logs only |
-| `--full` | AI reads the full conversation (including assistant text) | Script extracts user messages; AI analyzes compact text only |
+| 参数 | 说明 | 默认行为 |
+|------|------|---------|
+| `--input <路径>` | 额外读取外部对话文件（txt/md），支持单文件或目录 | 仅读取 distill-logs |
+| `--full` | AI 读取完整对话（含 assistant 原文） | 脚本提取用户发言，AI 只分析精简文本 |
 
-### Execution steps
+### 执行步骤
 
-1. **Parse parameters**, confirm read scope and depth
+1. **解析参数**，确认读取范围和深度
 
-2. **Incremental check: determine sessions to process**
+2. **增量检查：确定需要处理的 session**
 
-   Scan distill-logs, and check whether an old `_extract_*.md` exists:
+   扫描 distill-logs，同时检查是否存在旧的 `_extract_*.md`：
 
    ```bash
    ls ~/.claude/distill-logs/*.md | grep -v '_extract_'
    ```
 
-   - If an old `_extract_*.md` exists: read its `processed_sessions` field from frontmatter to get the list of already-processed files
-   - Compute **new sessions = all sessions − processed_sessions**
-   - Report to user: "X total sessions, Y already processed, Z new."
+   - 如果存在旧 `_extract_*.md`：读取其 frontmatter 中的 `processed_sessions` 字段，得到已处理文件列表
+   - 计算 **新 session = 全部 session − processed_sessions**
+   - 告知用户：「共 X 条记录，已处理 Y 条，本次新增 Z 条」
 
-   If new sessions = 0, prompt: "All sessions have been processed in the last extract. Re-run full analysis?" Wait for confirmation before continuing.
+   若新 session = 0，提示用户：「所有记录已在上次提炼中处理。是否重新全量分析？」，等待确认后再继续。
 
-3. **Single script call to generate all batch files**
+3. **一次调用脚本，生成所有 batch 文件**
 
-   Default mode (without `--full`) — **single script call**, script handles splitting:
+   默认模式（不带 `--full`）——**单次脚本调用**，脚本负责切分：
    ```bash
    python3 ~/.claude/skills/self-distill/scripts/extract_users.py \
      ~/.claude/distill-logs/ \
-     --files <new session filenames> \
+     --files <新 session 文件名列表> \
      --batch-size 5 \
      --output-dir ~/.claude/distill-logs/_extract_batches
    ```
-   Script automatically: truncates long messages (default 500 chars), splits M files into ceil(M/5) batch files, outputs each file path.
+   脚本自动：截断超长消息（默认 500 字符），将 M 个文件切分为 ceil(M/5) 个 batch 文件，输出各文件路径。
 
-   Full mode (`--full`): AI reads the files' complete content directly, skipping the script.
+   完整模式（`--full`）：AI 直接读取这几个文件的完整内容，跳过脚本。
 
-   **Analysis phase (read batch files serially)**
+   **分析阶段（串行读取 batch 文件）**
 
-   Use the old `_extract_` candidate list as the initial **running base** (empty if no old file):
+   以旧 `_extract_` 的候选列表作为初始 **running base**（如无旧文件则从空开始）：
 
    ```
-   For each batch file generated by the script (_batch_001.txt, _batch_002.txt, ...):
-     1. Read the batch file
-     2. AI analyzes: batch content + current running base candidate list
-        → merge duplicates, strengthen existing evidence, append new patterns, filter noise
-     3. Update running base = merged result from this batch
-   After all batches, running base = final candidate list
+   对脚本生成的每个 batch 文件（_batch_001.txt, _batch_002.txt, ...）：
+     1. 读取该 batch 文件
+     2. AI 分析：batch 内容 + 当前 running base 候选列表
+        → 合并同类项，强化已有证据，新增新模式，过滤噪音
+     3. 更新 running base = 本批合并结果
+   所有批次完成后，running base = 最终候选列表
    ```
 
-   > Report progress to user during analysis: "Processing batch N/M…"
-   > Clean up batch files after analysis: `rm -rf ~/.claude/distill-logs/_extract_batches`
+   > 分析过程中向用户报告进度：「正在处理第 N/M 批…」
+   > 分析完成后清理 batch 文件：`rm -rf ~/.claude/distill-logs/_extract_batches`
 
-4. **Aggregate and group (merge similar items)**
-   - Merge semantically similar patterns
-   - Count **frequency** and **cross-session occurrence rate** for each pattern
-   - Correction behavior in negative sessions gets weight ×1.5 (from frontmatter `sentiment: negative`)
-   - Calculate **demand strength = frequency × cross-session rate**
+4. **聚合归类（合并同类项）**
+   - 将语义相近的模式合并
+   - 统计每个模式出现的**频次**和**跨 session 出现率**
+   - negative session 中的纠正行为权重 ×1.5（来自 frontmatter `sentiment: negative`）
+   - 计算**需求强度 = 频次 × 跨 session 率**
 
-4.5. **Candidate quality filter (three-question check)**
+4.5. **候选质量过滤（三问判断）**
 
-   For each aggregated pattern, ask three questions in order. If any answer is "yes", the pattern does not become a skill candidate:
+   对每个聚合后的模式，依次问三个问题，任何一个为"是"则不进入 skill 候选：
 
-   | Question | Criterion | Action |
-   |----------|-----------|--------|
-   | Can Claude do this well without a skill? | Claude already has this domain knowledge (general programming, standard tools, common workflows) | Discard |
-   | Is this a one-off need? | Tightly bound to a specific current project, will not recur after completion | Discard |
-   | Better suited for memory/preferences? | Not a workflow, but a behavioral preference about "how the AI should treat you" | Classify as **memory candidate** |
+   | 问题 | 判断标准 | 处理 |
+   |------|---------|------|
+   | 不需要 skill 也能做好？ | Claude 本身已具备此领域知识（通用编程、工具使用、标准流程） | 丢弃 |
+   | 一次性需求？ | 与当前特定项目强绑定，完成后不会复现 | 丢弃 |
+   | 更符合 memory/偏好？ | 不是流程，而是"AI 应该如何对待你"的行为偏好或约束 | 分类为 **memory 候选** |
 
-   Memory candidates do not generate skills. They are listed separately after step 7, and the user decides in the apply phase whether to write them to memory.
+   memory 候选不生成 skill，在步骤 7 后单独列出，apply 阶段由用户决定是否写入 memory。
 
-5. **Generate full candidate list (sorted by demand strength)**
+5. **生成全量候选列表（按需求强度排序）**
 
-   Keep all candidates that pass the three-question filter, no truncation. Sort by demand strength descending:
+   保留所有通过三问过滤的候选，不截断。按需求强度降序排列：
    ```
-   ## Skill Candidate #N: <name>
-   - Trigger: when do you repeatedly need this
-   - Core content: what should this skill tell the AI
-   - Evidence: which sessions it appeared in (date + topic)
-   - Demand strength: ★★★☆☆ (frequency / session count)
+   ## Skill 候选 #N: <候选名>
+   - 触发场景：你在什么情况下反复需要这个
+   - 核心内容：这个 skill 应该告诉 AI 什么
+   - 证据来源：出现在哪几个 session（日期 + topic）
+   - 需求强度：★★★☆☆（频次 / 跨 session 数）
    ```
-   Memory candidates are also kept in full, listed in a separate section, also sorted by demand strength.
+   Memory 候选同样全量保留，单独成节，同样按需求强度排序。
 
-6. **Save / output results**
+6. **保存/输出提炼结果**
 
-   **Claude Code environment**: write to file
+   **Claude Code 环境**：写入文件
    ```
    ~/.claude/distill-logs/_extract_<YYYY-MM-DD>.md
    ```
-   File structure:
-   - frontmatter: update `processed_sessions` (complete list)
-   - **Analysis Notes section**: record key AI reasoning from this run — why certain patterns were classified as skill vs memory vs discarded, cross-batch observations, notable boundary judgments. This is the core of the distillation record, referenced by future extract runs.
-   - Skill candidates full list (sorted by demand strength)
-   - Memory candidates full list (sorted by demand strength)
-   - Filter explanation (discarded patterns and reasons)
-   - Merge history (changes when merging with old `_extract_`)
+   文件结构：
+   - frontmatter：更新 `processed_sessions`（完整列表）
+   - **Analysis Notes 节**：记录 AI 在本次分析中的关键推理——为什么某些模式被归为 skill vs memory vs 丢弃，跨 batch 观察到的规律，值得注意的边界判断。这是蒸馏记录的核心，供后续 extract 参考。
+   - Skill 候选全量列表（按需求强度排序）
+   - Memory 候选全量列表（按需求强度排序）
+   - 过滤说明（被丢弃的模式及原因）
+   - 历史合并记录（如有旧 `_extract_` 合并时的变化）
 
-   When merging with old file: strengthen existing evidence, append new candidates, re-sort by demand strength, preserve full history.
+   候选列表合并旧文件时：强化已有证据，新增新候选，重新按需求强度排序，保留完整历史。
 
-   **Web environment**: output the complete extract report directly in the conversation (format: `references/extract-format.md`).
-   Prompt the user to copy and save it. Pass the old report via `--input` next time for incremental accumulation.
+   **Web 环境**：直接在对话中输出完整提炼报告（格式见 `references/extract-format.md`），
+   提示用户复制保存。下次 extract 时可通过 `--input` 传入旧报告，实现增量累积。
 
-7. **Ask the user**:
-   > "These are the full candidates distilled from X archived sessions (N skills, M memory). Would you like to edit a candidate's description, or proceed to [apply] to generate SKILL.md files? Memory candidates can also be confirmed for writing in the apply phase."
-
----
-
-## [APPLY MODE]: Generate usable SKILL.md files
-
-**Goal**: Turn confirmed skill candidates into properly formatted `SKILL.md` files.
-
-### Execution steps
-
-1. **Retrieve extract results**
-
-   **Claude Code environment**: read the latest local extract file
-   ```
-   ~/.claude/distill-logs/_extract_<latest date>.md
-   ```
-   **Web environment**: use the candidate list from this conversation's extract output, or ask the user to paste a previously saved extract report
-
-2. **Confirm which skills to generate**
-   - If the user hasn't specified, list all candidates and ask them to choose (enter numbers or "all")
-   - If the extract results contain **memory candidates**, list them separately and ask:
-     > "The following patterns are better suited for memory than skills. Add to `~/.claude/memory/`?"
-     > [List memory candidates; write after user confirms]
-
-3. **Generate SKILL.md for each candidate**
-
-   Check skill_creator availability, decide by priority:
-
-   ```
-   ~/.claude/skills/skill-creator/ exists?
-     Yes → call /skill-creator, pass candidate description (trigger + core content) as input
-     No  → read skill_creator field from ~/.claude/skills/self-distill/config.json
-           "skip"    → use built-in process directly, no further prompts
-           not set   → ask the user (see below)
-   ```
-
-   **First-time prompt when skill_creator is not detected**:
-   > "skill-creator not found. It can significantly improve generation quality.
-   > Choose:
-   > - `y` — install now (installation steps will be shown)
-   > - `n` — skip for this session, use built-in process
-   > - `never` — skip and never prompt again (writes to config)"
-
-   - `y`: show installation steps; re-trigger apply after user installs
-   - `n`: use built-in process this time; will ask again next time
-   - `never`: write to `~/.claude/skills/self-distill/config.json` (`{"skill_creator": "skip"}`), use built-in process
-
-   **Built-in process (fallback)**:
-   - Follow standard frontmatter format (name, description)
-   - description should be "proactive" — include trigger keyword phrases to prevent under-triggering
-   - Draft body from candidate content; keep concise (<100 lines)
-
-   **Either way, always show content for user confirmation or editing before writing/outputting**
-
-4. **Write or output**
-
-   **Claude Code environment**: write to `~/.claude/skills/<skill-name>/SKILL.md`; Claude Code discovers it automatically.
-
-   **Web environment**: output the complete SKILL.md text (including frontmatter) for each skill in the conversation. After copying, the user should:
-   - Create a local folder `<skill-name>/` and save the content as `SKILL.md`
-   - Compress as ZIP → upload to Claude.ai Settings > Skills
+7. **询问用户**：
+   > "以上是从 X 条对话记录中蒸馏出的全量候选（N 个 skill，M 个 memory）。你想修改某个候选的描述，还是直接进入 [apply] 生成 SKILL.md？Memory 候选也可以在 apply 阶段确认写入。"
 
 ---
 
-## Additional commands
+## [APPLY 模式]：生成可用的 SKILL.md
+
+**目标**：将用户认可的 skill 候选，直接生成标准格式的 `SKILL.md` 文件。
+
+### 执行步骤
+
+1. **获取提炼结果**
+
+   **Claude Code 环境**：读取本地最新提炼文件
+   ```
+   ~/.claude/distill-logs/_extract_<最新日期>.md
+   ```
+   **Web 环境**：使用本次对话中 extract 输出的候选列表，或请用户粘贴之前保存的提炼报告
+
+2. **确认要生成哪些 skill**
+   - 如果用户没有指定，列出所有候选，请用户选择（输入编号或 "全部"）
+   - 如果提炼结果中有 **memory 候选**，单独列出并询问：
+     > "以下模式更适合写入 memory 而非 skill，是否添加到 `~/.claude/memory/`？"
+     > [列出 memory 候选，用户确认后写入]
+
+3. **生成每个候选的 SKILL.md**
+
+   检查 skill_creator 可用性，按以下优先级决策：
+
+   ```
+   ~/.claude/skills/skill-creator/ 存在？
+     是 → 调用 /skill-creator，把候选描述（触发场景 + 核心内容）作为输入
+     否 → 读取 ~/.claude/skills/self-distill/config.json 中的 skill_creator 字段
+           "skip"  → 直接走内置流程，不再询问
+           未设置  → 询问用户（见下）
+   ```
+
+   **首次未检测到 skill_creator 时的询问**：
+   > "未检测到 skill-creator。它可以显著提升生成质量。
+   > 请选择：
+   > - `y` — 现在安装（将显示安装方式）
+   > - `n` — 本次跳过，使用内置流程
+   > - `never` — 跳过，且以后不再提示（写入配置）"
+
+   - `y`：提示安装步骤，用户安装后重新触发 apply
+   - `n`：本次走内置流程，下次仍会询问
+   - `never`：写入 `~/.claude/skills/self-distill/config.json`（`{"skill_creator": "skip"}`），走内置流程
+
+   **内置流程（fallback）**：
+   - 遵循标准 frontmatter 格式（name、description）
+   - description 要"有点主动"——包含触发场景关键词，防止欠触发
+   - body 根据候选内容起草，保持简洁（<100 行）
+
+   **无论哪种方式，都先展示内容让用户确认或修改，再执行写入/输出**
+
+4. **写入或输出**
+
+   **Claude Code 环境**：写入 `~/.claude/skills/<skill-name>/SKILL.md`，Claude Code 自动发现。
+
+   **Web 环境**：在对话中直接输出每个 SKILL.md 的完整文本（含 frontmatter）。用户复制后：
+   - 本地新建文件夹 `<skill-name>/`，将内容存为 `SKILL.md`
+   - 压缩为 ZIP → 上传到 Claude.ai Settings > Skills
+---
+
+## 附加命令
 
 ### `/self-distill status`
-Shows:
-- Number of archived sessions and time span
-- Date and top-k summary of the latest extract file
-- List of generated skills
+显示：
+- 已记录的对话数量和时间跨度
+- 最新提炼文件的日期和 top-k 列表摘要
+- 已生成的 skill 列表
 
 ### `/self-distill package <skill-name>`
-Packages the specified skill directory as a `.skill` file for Claude.ai upload.
-See `references/packaging.md`.
+将指定 skill 目录打包为 `.skill` 文件，用于 Claude.ai 上传。
+参考 `references/packaging.md`。
 
-### Cold start: bootstrap extract from existing history
+### 冷启动：用历史对话热启动 extract
 
-If distill-logs has no accumulated archives yet, feed existing conversations directly to extract:
+如果 distill-logs 还没有积累，可以把已有的历史对话直接喂给 extract：
 
 ```
 /self-distill extract --input ~/Downloads/exported-chats/
 /self-distill extract --input ~/Downloads/chat-export.txt
 ```
 
-External file format is unrestricted — treated as plain text. Claude.ai supports exporting conversation history from the settings page.
-This way, the first extract is not empty — you can work directly from all your existing history.
+外部文件格式不限，按纯文本处理。Claude.ai 支持从设置页面导出对话记录。
+这样第一次 extract 就不是空的，可以直接基于已有所有历史对话工作。
 
 ---
 
-## Core principles
+## 重要原则
 
-1. **Accuracy first**: record is done by script; user text is taken directly from JSONL, not paraphrased by AI — no drift allowed
-2. **Incremental updates**: extract merges rather than overwrites; historical evidence is never lost
-3. **User confirmation**: the user must confirm skill content before apply writes anything — no silent generation
-4. **Path consistency**: all files stored in `~/.claude/distill-logs/`; skills output to `~/.claude/skills/`
-5. **Context awareness**: extract is a cross-conversation meta-operation; proactively check context state before starting, suggest a new session if needed
+1. **精确优先**：record 由脚本完成，用户原文直接从 JSONL 取，不经过 AI，不能有偏差
+2. **增量更新**：extract 不覆盖旧结果，而是合并，历史证据不丢失
+3. **用户确认**：apply 前必须让用户确认 skill 内容，不静默生成
+4. **路径一致性**：所有文件统一存储在 `~/.claude/distill-logs/`，skill 输出到 `~/.claude/skills/`
+5. **context 自觉**：extract 是跨对话的元操作，进入前主动检查 context 状态，必要时建议新开对话

@@ -1,153 +1,153 @@
-# Extract Output File Format
+# 提炼结果文件格式
 
-## File Naming
+## 文件命名
 
 ```
 _extract_YYYY-MM-DD.md
 ```
 
-Each extract run generates a new version, merged with the previous one (historical evidence is never lost).
+每次运行 extract 时生成新版本，与旧版本合并（历史证据不丢失）。
 
 ---
 
-## File Structure
+## 文件结构
 
 ```markdown
 ---
 generated: YYYY-MM-DD
 sessions_analyzed: N
-date_range: YYYY-MM-DD to YYYY-MM-DD
-previous_extract: _extract_YYYY-MM-DD.md (if any)
+date_range: YYYY-MM-DD 至 YYYY-MM-DD
+previous_extract: _extract_YYYY-MM-DD.md（如有）
 processed_sessions:
   - 2026-04-18_07-04_self-distill-release-prep.md
   - 2026-04-17_12-30_other-topic.md
 ---
 
-# Self-Distill Extract Report
+# Self-Distill 提炼报告
 
-## Overview
+## 分析概况
 
-- Sessions analyzed: N (X negative, weighted ×1.5)
-- Time span: X days
-- New sessions since last extract: P
-- Skill candidates: N, Memory candidates: M, Filtered/discarded: K
-
----
-
-## Analysis Notes
-
-Key reasoning from this run, for reference in future extract runs:
-
-- **Cross-batch observations**: (e.g., ROS debugging pattern in batches 1-2 and Docker pattern in batch 3 are essentially the same "tool config" type — merged and filtered as domain knowledge)
-- **Boundary judgments**: (e.g., session handoff documentation vs PLAN.md maintenance — former is a workflow with a clear trigger, latter is a continuous habit preference, so former → skill, latter → memory)
-- **Notable signals**: (e.g., "let user execute risky ops" appeared as correction behavior in 3 sessions — low frequency but high confidence)
-- **Other observations**: (reasoning about filtered patterns, and a brief description of overall behavioral profile)
+- 已分析对话：N 条（其中 X 条 negative，加权 ×1.5）
+- 时间跨度：X 天
+- 新增 session（相比上次提炼）：P 条
+- Skill 候选：N 个，Memory 候选：M 个，过滤丢弃：K 个
 
 ---
 
-## Skill Candidates (full, sorted by demand strength)
+## Analysis Notes（分析推理记录）
+
+本次分析中的关键推理，供后续 extract 参考：
+
+- **跨 batch 观察到的规律**：（例如：batch 1-2 中出现的 ROS 调试模式与 batch 3 中的 Docker 模式本质相同，均为"工具配置类"，合并后过滤为领域知识）
+- **边界判断**：（例如：会话文档化 vs PLAN.md 维护——前者是触发条件明确的工作流，后者是持续性习惯偏好，故前者 → skill，后者 → memory）
+- **值得注意的信号**：（例如：危险操作让用户执行这一模式在 3 个 session 中均有纠正行为，虽频次不高但置信度高）
+- **其他观察**：（对于被丢弃模式的推理，以及整体行为画像的简短描述）
 
 ---
 
-### Skill Candidate #1: <name>
-
-**Demand strength**: ★★★★☆ (frequency: X times, across N sessions)
-
-**Trigger**:
-When do you repeatedly need this — describe with concrete scenarios, not abstract terms.
-
-**Core content**:
-What should this skill tell the AI — specific constraints, preferences, workflow steps.
-
-**Evidence**:
-| Session | Date | Specific instance |
-|---------|------|-------------------|
-| topic-a | 2026-04-12 | User required all code comments to explain why, not what |
-| topic-b | 2026-04-10 | User corrected "don't use .cuda(), use .to(device)" |
-| topic-c | 2026-04-08 | Same preference recurred (negative session, weight bonus) |
-
-**Draft skill description** (for use in apply phase):
-> When the user is working on [domain] tasks, follow these constraints: [specific rule list]
+## Skill 候选（全量，按需求强度排序）
 
 ---
 
-### Skill Candidate #2: <name>
+### Skill 候选 #1: <候选名>
 
-(same format as above, and so on — list all skill candidates that passed the three-question filter in full)
+**需求强度**：★★★★☆（频次: X次，跨 N 个 session）
 
----
+**触发场景**：
+你在什么情况下反复需要这个——用具体场景描述，不要用抽象词汇。
 
-## Memory Candidates (full, sorted by demand strength)
+**核心内容**：
+这个 skill 应该告诉 AI 什么——具体的约束、偏好、工作流程步骤。
 
-The following patterns were classified as "behavior preferences / interaction constraints" by the three-question filter — better suited for memory than skills.
+**证据来源**：
+| Session | 日期 | 具体表现 |
+|---------|------|---------|
+| topic-a | 2026-04-12 | 用户要求所有代码注释补充 why 而非 what |
+| topic-b | 2026-04-10 | 用户纠正"不要用 .cuda()，用 .to(device)" |
+| topic-c | 2026-04-08 | 相同偏好再次出现（negative session，权重加成） |
 
----
-
-### Memory Candidate #1: <description>
-
-- **Demand strength**: ★★★★☆
-- **Pattern**: specific description of this behavioral preference
-- **Typical phrasing**: "..." (user's own words)
-- **Evidence**: topic-a, topic-b (X sessions)
-- **Classification reason**: why this is memory rather than skill
-
----
-
-(and so on — list all memory candidates in full)
+**草拟 skill 描述**（供 apply 阶段使用）：
+> 当用户在做 [领域] 相关任务时，遵循以下约束：[具体规则列表]
 
 ---
 
-## Discarded Patterns (filtered by three-question check)
+### Skill 候选 #2: <候选名>
 
-| Pattern | Filter reason | Note |
-|---------|---------------|------|
-| Docker Compose usage | Domain knowledge Claude already has | No skill needed |
-| Directory structure of a specific project | One-off need | Won't be reused after project ends |
+（同上格式，以此类推，全量列出所有通过三问过滤的 skill 候选）
 
 ---
 
-## Merge History
+## Memory 候选（全量，按需求强度排序）
 
-(Recorded when this extract merged a previous version)
+以下模式经三问过滤后判定为"行为偏好/交互约束"类，更适合写入 memory 而非生成 skill。
 
-- Candidate #1 demand strength increased from ★★★ to ★★★★ (2 new evidence items)
-- Candidate #3 is new this run (from 2 new sessions)
-- Former candidate #4 demoted to discarded/filtered (single session only, not seen recently)
+---
+
+### Memory 候选 #1: <描述>
+
+- **需求强度**：★★★★☆
+- **模式**：具体描述这个行为偏好
+- **典型用语**："..."（用户原话）
+- **证据来源**：topic-a、topic-b（X sessions）
+- **归类理由**：为什么这是 memory 而非 skill
+
+---
+
+（以此类推，全量列出所有 memory 候选）
+
+---
+
+## 过滤丢弃（经三问过滤）
+
+| 模式 | 过滤原因 | 说明 |
+|------|---------|------|
+| Docker Compose 用法 | 领域知识，Claude 已具备 | 不需要 skill |
+| 特定项目的目录结构说明 | 一次性需求 | 项目结束后不会再用 |
+
+---
+
+## 历史合并记录
+
+（本次 extract 合并了旧版本时，在此记录变化）
+
+- 候选 #1 需求强度从 ★★★ 升至 ★★★★（新增 2 条证据）
+- 候选 #3 为本次新增（来自 2 条新 session）
+- 旧候选 #4 降级到过滤丢弃（仅单 session，近期未再出现）
 ```
 
 ---
 
-## Analysis Dimensions Reference
+## 提炼分析维度参考
 
-During the extract phase, classify signals along these dimensions:
+extract 阶段分析时，按以下维度归类信号：
 
-### Skill candidate signals (high-frequency, cross-session, reusable)
+### Skill 候选信号（高频、跨 session、可复用）
 
-**1. Recurring user constraints**
-- "never add XX", "always add XX"
-- Specific naming conventions, code style rules
-- "be concise", "no filler"
+**1. 反复出现的用户约束**
+- "不要加 XX"、"永远要加 XX"
+- 特定命名规范、代码风格
+- "简洁"、"不要废话"
 
-**2. Repeated corrections to the AI**
-- "that's not what I meant" (signals a systematic AI misunderstanding)
-- "do it a different way" (signals a fixed preference the AI hasn't internalized)
-- Correction behavior in negative sessions, weight ×1.5
+**2. 反复纠正 AI 的方向**
+- "不是这个意思"（说明 AI 有系统性误解）
+- "换一种方式"（说明有固定偏好 AI 未能自动应用）
+- negative session 中的纠正行为，权重 ×1.5
 
-**3. Fixed workflows**
-- Steps for a certain type of task are consistently the same
-- User repeatedly guides the AI through the same sequence
+**3. 固定工作流程**
+- 每次做某类任务时步骤基本相同
+- 用户反复引导 AI 按同样顺序做事
 
-### Memory candidate signals (behavior preferences / interaction constraints)
+### Memory 候选信号（行为偏好/交互约束类）
 
-**4. Preferences about how the AI responds**
-- Tone, format, whether to add summary paragraphs
-- Boundary between exploratory questions vs. direct execution
-- Response length preference
+**4. AI 的回复方式偏好**
+- 语气、格式、是否加总结段落
+- 探索性问题 vs 直接执行的边界
+- 回复长度偏好
 
-### Three-question filter (the following types do not become skill candidates)
+### 三问过滤（以下类型不进入 skill 候选）
 
-| Question | Criterion | Action |
-|----------|-----------|--------|
-| Can Claude do this well without a skill? | General programming ability, standard tool usage, domain knowledge | Discard |
-| Is this a one-off need? | Tightly bound to a specific project, will not recur | Discard |
-| Better suited for memory/preferences? | Not a workflow, but "how the AI should treat you" | → Memory candidate |
+| 问题 | 判断标准 | 处理 |
+|------|---------|------|
+| Claude 不用 skill 也能做好？ | 通用编程能力、标准工具使用、领域知识 | 丢弃 |
+| 一次性需求？ | 与特定项目强绑定，完成后不会复现 | 丢弃 |
+| 更符合 memory/偏好？ | 不是流程，而是"AI 应该如何对待你" | → Memory 候选 |
