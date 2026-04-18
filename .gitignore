@@ -1,0 +1,6 @@
+.vscode
+.claude
+PLAN.md
+config.json
+__pycache__/
+*.pyc
