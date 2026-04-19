@@ -11,6 +11,8 @@
 
 A meta-tool that discovers, distills, and generates personalized skills from your own conversation history.
 
+The routine is simple: run `/self-distill record` at the end of a useful conversation, then periodically run `/self-distill extract` in a fresh session. That's it — a **user-driven** closed loop that stays out of your way.
+
 ---
 
 ## Why this tool exists
@@ -71,8 +73,15 @@ Three commands form a closed loop. Each step can be used independently.
 
 ### Claude Code
 
+**macOS / Linux:**
 ```bash
 cd ~/.claude/skills/
+git clone https://github.com/IRUJONEU/claude-code-self-distill self-distill
+```
+
+**Windows (PowerShell):**
+```powershell
+cd $env:USERPROFILE\.claude\skills\
 git clone https://github.com/IRUJONEU/claude-code-self-distill self-distill
 ```
 

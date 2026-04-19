@@ -11,6 +11,8 @@
 
 一个从你自己的历史对话中发现、提炼并生成个性化 skill 的元工具。
 
+用法很简单：每次对话结束后顺手运行一次 `/self-distill record`，积累够了再在新对话里跑一次 `/self-distill extract`，就够了——这是一个**由你主导**的闭环，最小化对现有工作方式的干扰。
+
 ---
 
 ## 为什么会有这个工具
@@ -71,8 +73,15 @@
 
 ### Claude Code
 
+**macOS / Linux：**
 ```bash
 cd ~/.claude/skills/
+git clone https://github.com/IRUJONEU/claude-code-self-distill self-distill
+```
+
+**Windows（PowerShell）：**
+```powershell
+cd $env:USERPROFILE\.claude\skills\
 git clone https://github.com/IRUJONEU/claude-code-self-distill self-distill
 ```
 
