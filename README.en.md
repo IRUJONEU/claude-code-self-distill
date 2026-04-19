@@ -7,7 +7,7 @@
 
 > Your conversation habits with AI are uniquely yours.  
 > Other people's skill templates never quite fit, but you don't know where to start writing your own.  
-> self-distill finds the answers in your past conversations.
+> Self-distill helps you find answers from conversations, but you take the lead.
 
 A meta-tool that discovers, distills, and generates personalized skills from your own conversation history.
 
