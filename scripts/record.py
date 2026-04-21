@@ -168,7 +168,8 @@ def format_log(turns: list[tuple], jsonl_path: Path, topic: str, sentiment: str 
     ]
     if reason:
         lines.append(f'- 标记理由：{reason}')
-    lines.append(f'')
+    lines += [
+        f'',
         f'---',
         f'',
         f'## 对话记录',
