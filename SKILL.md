@@ -56,8 +56,9 @@ disable-model-invocation: false
      --project <当前项目的 cwd> \
      --topic <topic> \
      [--positive | --negative]  # 可选，默认 neutral
+     [--reason "<理由>"]        # 可选，附加标记理由
    ```
-   用户主动提到体验好或体验差时，自动加对应 flag；未提及则省略。
+   用户主动提到体验好或体验差时，自动加对应 flag；若用户给出了理由（如"回复很精准"、"多次跑偏"），用 `--reason` 传入；未提及则省略。
    脚本自动：从 JSONL 精确提取用户原文（过滤系统标签）+ assistant 原文，写入 `~/.claude/distill-logs/YYYY-MM-DD_HH-MM_<topic>.md`，输出文件路径。
 
 3. **告知用户**保存路径，完成。无需 AI 读取任何内容。

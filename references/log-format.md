@@ -28,6 +28,7 @@ date: YYYY-MM-DD HH:MM
 topic: <topic>
 turns: <对话轮次数>
 sentiment: neutral | positive | negative
+reason: <标记理由，可选>
 tags: []
 ---
 
@@ -36,6 +37,7 @@ tags: []
 ## 元信息
 - 总轮次：N 轮
 - Session 文件：<jsonl-filename>.jsonl
+- 标记理由：<理由，仅在提供时出现>
 
 ---
 
@@ -80,7 +82,7 @@ tags: []
 | `positive` | 体验好的对话 | ×1.0 |
 | `negative` | 有纠正行为的对话 | ×1.5 |
 
-record 时通过 `--positive` / `--negative` flag 设置，默认 `neutral`。
+record 时通过 `--positive` / `--negative` flag 设置，默认 `neutral`。可选 `--reason "<理由>"` 附加说明，会写入 frontmatter 的 `reason` 字段（仅在提供时出现）。
 
 ---
 

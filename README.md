@@ -9,7 +9,11 @@
 > 别人的 skill 模板永远有点不对味，但你自己又不知道从哪开始写。  
 > self-distill 帮你从对话里找答案，但由你主导。
 
-一个从你自己的历史对话中发现、提炼并生成个性化 skill 的元工具。
+---
+
+> 从你自己的 Claude Code 历史对话中，提炼出值得固化的 skill 与 memory 候选。
+
+---
 
 用法很简单：每次对话结束后顺手运行一次 `/self-distill record`(如果体验不好，则加入 `--negative`)，积累够了再在新对话里跑一次 `/self-distill extract`，就够了——这是一个**由你主导**的闭环，最小化对现有工作方式的干扰。
 
@@ -119,11 +123,13 @@ AI 会自动推断 topic，运行 `record.py` 脚本解析当前 session 的 JSO
 #### 标记对话质量（可选）
 
 ```
-/self-distill record --positive   # 体验好的对话
-/self-distill record --negative   # 体验差、有纠正的对话
+/self-distill record --positive                           # 体验好的对话
+/self-distill record --positive --reason "回复很精准"     # 可选附加理由
+/self-distill record --negative                           # 体验差、有纠正的对话
+/self-distill record --negative --reason "多次跑偏需纠正"  # 可选附加理由
 ```
 
-负面对话在 extract 分析时权重 ×1.5，因为纠正行为是最直接的 skill 需求信号。不标记则默认 neutral。
+理由会写入存档的 frontmatter（`reason` 字段）和元信息，方便 extract 阶段复盘。负面对话在 extract 分析时权重 ×1.5，因为纠正行为是最直接的 skill 需求信号。不标记则默认 neutral。
 
 ---
 
