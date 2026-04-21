@@ -58,8 +58,9 @@ The user can switch to print mode at any time with `--output print`, or force fi
      --project <current project cwd> \
      --topic <topic> \
      [--positive | --negative]  # optional, defaults to neutral
+     [--reason "<reason>"]      # optional, reason for the sentiment tag
    ```
-   Add the corresponding flag when the user explicitly mentions a good or bad experience; omit it otherwise.
+   Add the corresponding flag when the user explicitly mentions a good or bad experience; if the user gives a reason (e.g. "very precise", "kept going off track"), pass it via `--reason`; omit both if not mentioned.
    The script automatically: extracts user messages verbatim from JSONL (filtering system tags) + full assistant text, writes to `~/.claude/distill-logs/YYYY-MM-DD_HH-MM_<topic>.md`, and prints the output path.
 
 3. **Inform the user** of the saved path. Done — no AI needs to read any content.

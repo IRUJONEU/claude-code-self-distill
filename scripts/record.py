@@ -137,7 +137,7 @@ def pair_turns(messages: list[dict]) -> list[tuple]:
     return turns
 
 
-def format_log(turns: list[tuple], jsonl_path: Path, topic: str, sentiment: str = 'neutral') -> str:
+def format_log(turns: list[tuple], jsonl_path: Path, topic: str, sentiment: str = 'neutral', reason: str = '') -> str:
     first_ts = turns[0][0]['timestamp'] if turns else ''
     if first_ts:
         dt = datetime.fromisoformat(first_ts.replace('Z', '+00:00'))
@@ -153,6 +153,10 @@ def format_log(turns: list[tuple], jsonl_path: Path, topic: str, sentiment: str 
         f'topic: {topic}',
         f'turns: {len(turns)}',
         f'sentiment: {sentiment}',
+    ]
+    if reason:
+        lines.append(f'reason: {reason}')
+    lines += [
         f'tags: []',
         f'---',
         f'',
@@ -161,7 +165,10 @@ def format_log(turns: list[tuple], jsonl_path: Path, topic: str, sentiment: str 
         f'## 元信息',
         f'- 总轮次：{len(turns)} 轮',
         f'- Session 文件：{jsonl_path.name}',
-        f'',
+    ]
+    if reason:
+        lines.append(f'- 标记理由：{reason}')
+    lines.append(f'')
         f'---',
         f'',
         f'## 对话记录',
@@ -197,6 +204,7 @@ def main():
     sentiment_group = parser.add_mutually_exclusive_group()
     sentiment_group.add_argument('--positive', action='store_true', help='Mark session as positive experience')
     sentiment_group.add_argument('--negative', action='store_true', help='Mark session as negative experience')
+    parser.add_argument('--reason', default='', help='Optional reason for the sentiment tag')
     args = parser.parse_args()
 
     if args.positive:
@@ -220,7 +228,7 @@ def main():
     print(f'Found {len(messages)} messages, {len(turns)} turns', file=sys.stderr)
 
     topic = args.topic or 'untitled'
-    content = format_log(turns, jsonl_path, topic, sentiment)
+    content = format_log(turns, jsonl_path, topic, sentiment, args.reason)
 
     if args.output == '-':
         print(content)

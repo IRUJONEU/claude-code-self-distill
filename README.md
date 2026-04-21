@@ -119,11 +119,13 @@ The AI infers the topic automatically, runs `record.py` to parse the current ses
 #### Tag conversation quality (optional)
 
 ```
-/self-distill record --positive   # good experience
-/self-distill record --negative   # frustrating, with corrections
+/self-distill record --positive                              # good experience
+/self-distill record --positive --reason "very precise"      # optional reason
+/self-distill record --negative                              # frustrating, with corrections
+/self-distill record --negative --reason "kept going off track"  # optional reason
 ```
 
-Negative sessions get ×1.5 weight in extract analysis, because correction behavior is the most direct signal for skill needs. Untagged sessions default to neutral.
+The reason is written to the archive's frontmatter (`reason` field) and metadata section, making it easier to review during extract. Negative sessions get ×1.5 weight in extract analysis, because correction behavior is the most direct signal for skill needs. Untagged sessions default to neutral.
 
 ---
 

@@ -28,6 +28,7 @@ date: YYYY-MM-DD HH:MM
 topic: <topic>
 turns: <number of turns>
 sentiment: neutral | positive | negative
+reason: <optional sentiment reason>
 tags: []
 ---
 
@@ -36,6 +37,7 @@ tags: []
 ## Metadata
 - Total turns: N
 - Session file: <jsonl-filename>.jsonl
+- Reason: <reason, only present when provided>
 
 ---
 
@@ -80,7 +82,7 @@ tags: []
 | `positive` | Good experience | ×1.0 |
 | `negative` | Session with corrections | ×1.5 |
 
-Set at record time via `--positive` / `--negative` flag; defaults to `neutral`.
+Set at record time via `--positive` / `--negative` flag; defaults to `neutral`. An optional `--reason "<text>"` can be added — it is written to the `reason` frontmatter field (omitted when not provided).
 
 ---
 
