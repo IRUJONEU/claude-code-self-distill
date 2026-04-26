@@ -10,7 +10,7 @@ description: >
   "self-distill"、"record"、"extract"、"记录对话"、"存档对话"、"保存这次对话"、
   "蒸馏我的 skill"、"提炼历史"、"提炼对话"、"分析我的对话"、"分析我的习惯"、
   "发现我需要什么 skill"、"生成我的 skill"、"整理过去的对话"。
-  不要在用户只是讨论 skill 概念、或询问如何写 SKILL.md 时触发（那是 skill-creator 的范围）。
+  不要在用户只是讨论 skill 概念、或询问如何写 SKILL.md 时触发。
 disable-model-invocation: false
 ---
 
@@ -218,33 +218,12 @@ disable-model-invocation: false
 
 3. **生成每个候选的 SKILL.md**
 
-   检查 skill_creator 可用性，按以下优先级决策：
-
-   ```
-   ~/.claude/skills/skill-creator/ 存在？
-     是 → 调用 /skill-creator，把候选描述（触发场景 + 核心内容）作为输入
-     否 → 读取 ~/.claude/skills/self-distill/config.json 中的 skill_creator 字段
-           "skip"  → 直接走内置流程，不再询问
-           未设置  → 询问用户（见下）
-   ```
-
-   **首次未检测到 skill_creator 时的询问**：
-   > "未检测到 skill-creator。它可以显著提升生成质量。
-   > 请选择：
-   > - `y` — 现在安装（将显示安装方式）
-   > - `n` — 本次跳过，使用内置流程
-   > - `never` — 跳过，且以后不再提示（写入配置）"
-
-   - `y`：提示安装步骤，用户安装后重新触发 apply
-   - `n`：本次走内置流程，下次仍会询问
-   - `never`：写入 `~/.claude/skills/self-distill/config.json`（`{"skill_creator": "skip"}`），走内置流程
-
-   **内置流程（fallback）**：
+   使用内置流程起草：
    - 遵循标准 frontmatter 格式（name、description）
    - description 要"有点主动"——包含触发场景关键词，防止欠触发
    - body 根据候选内容起草，保持简洁（<100 行）
 
-   **无论哪种方式，都先展示内容让用户确认或修改，再执行写入/输出**
+   **先展示内容让用户确认或修改，再执行写入/输出**
 
 4. **写入或输出**
 
