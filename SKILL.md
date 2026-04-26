@@ -11,8 +11,7 @@ description: >
   "self-distill", "record", "extract", "archive conversation", "save this conversation",
   "distill my skills", "distill history", "analyze my conversations", "analyze my habits",
   "discover what skills I need", "generate my skills", "review past conversations".
-  Do NOT trigger when the user is only discussing skill concepts or asking how to write a SKILL.md
-  (that is skill-creator's domain).
+  Do NOT trigger when the user is only discussing skill concepts or asking how to write a SKILL.md.
 disable-model-invocation: false
 ---
 
@@ -220,33 +219,12 @@ After output, prompt:
 
 3. **Generate SKILL.md for each candidate**
 
-   Check skill_creator availability, decide by priority:
-
-   ```
-   ~/.claude/skills/skill-creator/ exists?
-     Yes → call /skill-creator, pass candidate description (trigger + core content) as input
-     No  → read skill_creator field from ~/.claude/skills/self-distill/config.json
-           "skip"    → use built-in process directly, no further prompts
-           not set   → ask the user (see below)
-   ```
-
-   **First-time prompt when skill_creator is not detected**:
-   > "skill-creator not found. It can significantly improve generation quality.
-   > Choose:
-   > - `y` — install now (installation steps will be shown)
-   > - `n` — skip for this session, use built-in process
-   > - `never` — skip and never prompt again (writes to config)"
-
-   - `y`: show installation steps; re-trigger apply after user installs
-   - `n`: use built-in process this time; will ask again next time
-   - `never`: write to `~/.claude/skills/self-distill/config.json` (`{"skill_creator": "skip"}`), use built-in process
-
-   **Built-in process (fallback)**:
+   Use the built-in process to draft:
    - Follow standard frontmatter format (name, description)
    - description should be "proactive" — include trigger keyword phrases to prevent under-triggering
    - Draft body from candidate content; keep concise (<100 lines)
 
-   **Either way, always show content for user confirmation or editing before writing/outputting**
+   **Always show content for user confirmation or editing before writing/outputting**
 
 4. **Write or output**
 

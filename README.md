@@ -44,7 +44,7 @@ You decide which sessions are worth archiving. The AI finds the patterns in thos
 
 | ✅ Is | ❌ Is not |
 |------|--------|
-| Helps you discover what skills or memory you need | Writes a specific skill for you (that's skill-creator) |
+| Helps you discover what skills or memory you need | Writes a specific skill for you |
 | Cross-conversation pattern mining | Fully automatic, no intervention needed |
 | Semi-automatic, user-driven filtering | Only outputs skills |
 
@@ -231,11 +231,7 @@ The AI reads the latest `_extract_*.md`, lists all candidates, and you choose wh
 
 #### Skill generation
 
-If [skill-creator](https://github.com/IRUJONEU/claude-code-skill-creator) is installed: the AI calls `/skill-creator` automatically for higher quality output.
-
-If not installed: the AI uses a built-in process; on first run it will ask if you want to install it. Choose `never` to skip the prompt permanently.
-
-**Either way, the AI shows you the content for confirmation before writing any files.**
+The AI uses a built-in process to draft the SKILL.md, and **shows you the content for confirmation before writing any files.**
 
 Generated skills are written to: `~/.claude/skills/<skill-name>/SKILL.md`
 
