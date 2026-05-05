@@ -140,7 +140,7 @@ def pair_turns(messages: list[dict]) -> list[tuple]:
 def format_log(turns: list[tuple], jsonl_path: Path, topic: str, sentiment: str = 'neutral', reason: str = '') -> str:
     first_ts = turns[0][0]['timestamp'] if turns else ''
     if first_ts:
-        dt = datetime.fromisoformat(first_ts.replace('Z', '+00:00'))
+        dt = datetime.fromisoformat(first_ts.replace('Z', '+00:00')).astimezone()
         date_str = dt.strftime('%Y-%m-%d %H:%M')
         date_header = dt.strftime('%Y-%m-%d')
     else:
@@ -239,7 +239,7 @@ def main():
         else:
             first_ts = turns[0][0]['timestamp'] if turns else ''
             if first_ts:
-                dt = datetime.fromisoformat(first_ts.replace('Z', '+00:00'))
+                dt = datetime.fromisoformat(first_ts.replace('Z', '+00:00')).astimezone()
                 filename = dt.strftime(f'%Y-%m-%d_%H-%M_{topic}.md')
             else:
                 filename = f'{datetime.now().strftime("%Y-%m-%d_%H-%M")}_{topic}.md'
