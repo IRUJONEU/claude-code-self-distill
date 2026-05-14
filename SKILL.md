@@ -113,6 +113,24 @@ After output, prompt:
 
    If new sessions = 0, prompt: "All sessions have been processed in the last extract. Re-run full analysis?" Wait for confirmation before continuing.
 
+2b. **Apply state scan: determine which candidates are already live**
+
+   Before analysis begins, scan current apply state for candidate labeling in step 5:
+
+   ```bash
+   # Existing skills
+   ls ~/.claude/skills/
+
+   # Existing memory entries (excluding MEMORY.md)
+   ls ~/.claude/memory/ | grep -v MEMORY.md
+
+   # Existing hooks (event + first 60 chars of command)
+   jq -r '.hooks // {} | to_entries[] | "\(.key): \(.value[0].hooks[0].command[:60])..."' \
+     ~/.claude/settings.json 2>/dev/null
+   ```
+
+   Record the scan result as **apply_state**, used in step 5 to label each candidate `[✅ Applied]` / `[❌ Pending]`.
+
 3. **Single script call to generate all batch files**
 
    Default mode (without `--full`) — **single script call**, script handles splitting:
@@ -149,29 +167,54 @@ After output, prompt:
    - Correction behavior in negative sessions gets weight ×1.5 (from frontmatter `sentiment: negative`)
    - Calculate **demand strength = frequency × cross-session rate**
 
-4.5. **Candidate quality filter (three-question check)**
+4.5. **Candidate quality filter (four-question check)**
 
-   For each aggregated pattern, ask three questions in order. If any answer is "yes", the pattern does not become a skill candidate:
+   For each aggregated pattern, ask four questions in order. Answer "yes" to any one and the pattern exits the skill candidate path:
 
    | Question | Criterion | Action |
    |----------|-----------|--------|
    | Can Claude do this well without a skill? | Claude already has this domain knowledge (general programming, standard tools, common workflows) | Discard |
    | Is this a one-off need? | Tightly bound to a specific current project, will not recur after completion | Discard |
    | Better suited for memory/preferences? | Not a workflow, but a behavioral preference about "how the AI should treat you" | Classify as **memory candidate** |
+   | Better suited as a hook? | The behavior should **auto-trigger** on a system event (tool call, session end, file save) rather than rely on the AI to judge and initiate mid-conversation | Classify as **hook candidate** |
 
-   Memory candidates do not generate skills. They are listed separately after step 7, and the user decides in the apply phase whether to write them to memory.
+   Typical hook candidate signals:
+   - User said "every time after X", "whenever X happens", "at the end of every session"
+   - A memory entry that exists long-term but repeatedly fails to trigger proactively (AI remembers it but never initiates it)
+   - The correction was about "forgetting to do" something, not "doing it wrong"
+
+   Neither memory nor hook candidates generate skills. Both are listed separately after step 7; the user decides in the apply phase whether to write them.
 
 5. **Generate full candidate list (sorted by demand strength)**
 
-   Keep all candidates that pass the three-question filter, no truncation. Sort by demand strength descending:
+   Keep all candidates that pass the four-question filter, no truncation. Use apply_state to label each item. Sort by demand strength descending. Each type gets its own section:
+
+   **Skill candidate format**:
    ```
-   ## Skill Candidate #N: <name>
+   ## Skill Candidate #N: <name> [✅ Applied / ❌ Pending]
    - Trigger: when do you repeatedly need this
    - Core content: what should this skill tell the AI
    - Evidence: which sessions it appeared in (date + topic)
    - Demand strength: ★★★☆☆ (frequency / session count)
    ```
-   Memory candidates are also kept in full, listed in a separate section, also sorted by demand strength.
+
+   **Hook candidate format** (separate section, after Skill candidates):
+   ```
+   ## Hook Candidate #N: <name> [✅ Applied / ❌ Pending]
+   - Trigger event: Stop / PostToolUse(Write|Edit) / SessionStart / ...
+   - Core behavior: what the hook should do automatically (one sentence)
+   - Why hook and not memory: ...
+   - Evidence: which sessions it appeared in (date + topic)
+   - Demand strength: ★★★☆☆ (frequency / session count)
+   ```
+
+   **Memory candidate format** (separate section, after Hook candidates):
+   ```
+   ## Memory Candidate #N: <name> [✅ Applied / ❌ Pending]
+   - Behavior preference: how the AI should treat you
+   - Evidence: which sessions it appeared in (date + topic)
+   - Demand strength: ★★★☆☆ (frequency / session count)
+   ```
 
 6. **Save / output results**
 
@@ -180,10 +223,22 @@ After output, prompt:
    ~/.claude/distill-logs/_extract_<YYYY-MM-DD>.md
    ```
    File structure:
-   - frontmatter: update `processed_sessions` (complete list)
-   - **Analysis Notes section**: record key AI reasoning from this run — why certain patterns were classified as skill vs memory vs discarded, cross-batch observations, notable boundary judgments. This is the core of the distillation record, referenced by future extract runs.
-   - Skill candidates full list (sorted by demand strength)
-   - Memory candidates full list (sorted by demand strength)
+   - frontmatter: update `processed_sessions` (complete list) + structured apply state:
+     ```yaml
+     hook_candidates: <count>
+     applied:
+       skills: [...]
+       memories: [...]
+       hooks: [...]
+     pending:
+       skills: [...]
+       memories: [...]
+       hooks: [...]
+     ```
+   - **Analysis Notes section**: record key AI reasoning from this run — why certain patterns were classified as skill vs memory vs hook vs discarded, cross-batch observations, notable boundary judgments. This is the core of the distillation record, referenced by future extract runs.
+   - Skill candidates full list (sorted by demand strength, with ✅/❌ labels)
+   - Hook candidates full list (sorted by demand strength, with ✅/❌ labels)
+   - Memory candidates full list (sorted by demand strength, with ✅/❌ labels)
    - Filter explanation (discarded patterns and reasons)
    - Merge history (changes when merging with old `_extract_`)
 
@@ -193,7 +248,7 @@ After output, prompt:
    Prompt the user to copy and save it. Pass the old report via `--input` next time for incremental accumulation.
 
 7. **Ask the user**:
-   > "These are the full candidates distilled from X archived sessions (N skills, M memory). Would you like to edit a candidate's description, or proceed to [apply] to generate SKILL.md files? Memory candidates can also be confirmed for writing in the apply phase."
+   > "These are the full candidates distilled from X archived sessions (N skills, K hooks, M memory). Would you like to edit a candidate's description, or proceed to [apply]? Hook candidates need to be written to `~/.claude/settings.json`; memory candidates go to `~/.claude/memory/` — both are confirmed in the apply phase."
 
 ---
 
@@ -211,8 +266,12 @@ After output, prompt:
    ```
    **Web environment**: use the candidate list from this conversation's extract output, or ask the user to paste a previously saved extract report
 
-2. **Confirm which skills to generate**
-   - If the user hasn't specified, list all candidates and ask them to choose (enter numbers or "all")
+2. **Confirm which skills / hooks / memory entries to apply**
+   - If the user hasn't specified, list all ❌ Pending candidates and ask them to choose (enter numbers or "all")
+   - If the extract results contain **hook candidates**, list them separately and ask:
+     > "The following patterns are suggested as hooks to auto-trigger on system events. Write to `~/.claude/settings.json`?"
+     > [List hook candidates; show suggested JSON config (event + command); write after user confirms]
+     > ⚠️ Writing hooks requires non-auto mode. If blocked by permissions, show the JSON for the user to paste manually.
    - If the extract results contain **memory candidates**, list them separately and ask:
      > "The following patterns are better suited for memory than skills. Add to `~/.claude/memory/`?"
      > [List memory candidates; write after user confirms]
