@@ -39,8 +39,8 @@
 
 - **几乎零 token record**：存档由脚本完成，直接解析 Claude Code 原生的 JSONL 文件，几乎不消耗任何 token，context 用量 95% 时也可安全调用
 - **正负例标记**：record 时可标记 `--positive` / `--negative`，负面 session（有纠正行为）在分析时获得更高权重，是最直接的 skill 需求信号
-- **三问过滤**：extract 分析前自动过滤掉"Claude 本身已具备的能力"和"一次性需求"，只保留真正值得固化的模式
-- **skill + memory 双输出**：行为偏好类候选不强行生成 skill，而是建议写入 memory，由你确认
+- **四问过滤**：extract 分析前自动过滤掉"Claude 本身已具备的能力"和"一次性需求"，并区分 hook 候选（需要系统层自动触发）和 memory 候选（行为偏好），只有真正需要写成 skill 的模式才进入 skill 候选
+- **skill + hook + memory 三输出**：行为偏好类候选建议写入 memory，需要事件自动触发的模式建议配置为 hook，均由你确认后落地
 
 ---
 
@@ -48,7 +48,7 @@
 
 | ✅ 是 | ❌ 不是 |
 |------|--------|
-| 帮你发现你需要什么 skill 或 memory | 帮你写某个具体的 skill |
+| 帮你发现你需要什么 skill、hook 或 memory | 帮你写某个具体的 skill |
 | 跨对话的模式挖掘 | 全自动运行，无需干预 |
 | 半自动，用户主动筛选 | 只输出 skill |
 
@@ -65,8 +65,8 @@
                                         全量候选列表（按需求强度排序）
                                                 ↓
                                            [apply]
-                                      ↙            ↘
-                               生成 skill      写入 memory
+                                  ↙           ↓          ↘
+                           生成 skill    配置 hook     写入 memory
 ```
 
 三个命令形成闭环，每个环节都可以单独使用。
@@ -171,29 +171,44 @@ AI 直接读取对话全文（含 assistant 回复），适合存档数量少（
 
 #### extract 的分析逻辑
 
-AI 在生成候选前会对每个模式做三问过滤，**以下类型不会进入候选列表**：
+AI 在生成候选前会对每个模式做**四问过滤**，依次判断：
 
-1. **Claude 本身已具备的能力**（通用编程、标准工具使用等）→ 不需要 skill
-2. **一次性需求**（与特定项目强绑定，完成后不会再出现）→ 不值得固化
-3. **行为偏好类**（"不要加超出需求的注释"等约束）→ 更适合写入 memory，单独列出
+1. **Claude 本身已具备的能力**（通用编程、标准工具使用等）→ 丢弃，不需要 skill
+2. **一次性需求**（与特定项目强绑定，完成后不会再出现）→ 丢弃，不值得固化
+3. **行为偏好类**（"不要加超出需求的注释"等约束）→ 分类为 **memory 候选**，单独列出
+4. **应自动触发而非依赖 AI 主动判断**（如"每次对话结束时提醒更新 PLAN.md"）→ 分类为 **hook 候选**，单独列出
 
-#### 增量追踪
+hook 候选的典型特征：某条 memory 长期存在但反复失效（AI 记得但忘记主动触发），或纠正的是"忘记做"而不是"做错了"。
 
-每次 extract 前，AI 会对比已有的 `_extract_*.md` 和当前存档，只处理新增的 session，并告知：「共 X 条记录，已处理 Y 条，本次新增 Z 条」。从而节约token消耗，且保证历史证据不丢失。
+#### 增量追踪与状态感知
+
+每次 extract 前，AI 会：
+1. 对比已有的 `_extract_*.md` 和当前存档，只处理新增的 session，并告知：「共 X 条记录，已处理 Y 条，本次新增 Z 条」
+2. 扫描当前已落地的状态（`~/.claude/skills/`、`~/.claude/memory/`、`settings.json` 中的 hooks），在候选列表上标注 `[✅ Applied]` / `[❌ Pending]`，避免重复分析已完成的候选
 
 #### 输出格式
 
-所有通过三问过滤的候选**全量保留**，按需求强度排序——没有数量上限，每一个有价值的发现都不会被截断。
+所有通过四问过滤的候选**全量保留**，按需求强度排序。三类候选各有独立节，均含落地状态标注：
 
 ```
-## Skill 候选 #N: <候选名>
+## Skill 候选 #N: <候选名> [✅ Applied / ❌ Pending]
 - 触发场景：你在什么情况下反复需要这个
 - 核心内容：这个 skill 应该告诉 AI 什么
 - 证据来源：出现在哪几个 session（日期 + topic）
 - 需求强度：★★★☆☆
+
+## Hook 候选 #N: <候选名> [✅ Applied / ❌ Pending]
+- 触发事件：Stop / PostToolUse / SessionStart / ...
+- 核心行为：hook 应自动做什么
+- 为什么是 hook 而不是 memory：...
+- 需求强度：★★★☆☆
+
+## Memory 候选 #N: <候选名> [✅ Applied / ❌ Pending]
+- 行为偏好：AI 应该如何对待你
+- 需求强度：★★★☆☆
 ```
 
-结果保存至 `~/.claude/distill-logs/_extract_YYYY-MM-DD.md`，包含：Skill 候选、Memory 候选、**Analysis Notes**（AI 的分析推理记录，包括分类边界判断和被过滤模式的原因）。多次运行**合并更新**，历史证据不会丢失。
+结果保存至 `~/.claude/distill-logs/_extract_YYYY-MM-DD.md`，包含：Skill / Hook / Memory 候选全量列表、**Analysis Notes**（AI 的分析推理记录）、frontmatter 中的 `applied` / `pending` 结构化状态。多次运行**合并更新**，历史证据不会丢失。
 
 #### 实际输出示例
 
@@ -217,12 +232,12 @@ AI 在生成候选前会对每个模式做三问过滤，**以下类型不会进
 > | 4 | 跳过明显确认 — 意图清晰时直接进行 | ★★☆☆☆ | 1 session（主动纠正）|
 > | 5 | 始终使用中文 — 不因日志/代码是其他语言切换 | ★★☆☆☆ | 2 sessions（主动纠正）|
 >
-> 共 1 个 skill 候选 + 5 个 memory 候选。
-> 进入 \[apply\] 生成 SKILL.md / 写入 memory 吗？
+> 共 1 个 skill 候选 + 1 个 hook 候选 + 5 个 memory 候选。
+> 进入 \[apply\] 生成 SKILL.md / 配置 hook / 写入 memory 吗？
 
 ---
 
-### apply — 生成 skill 或更新 memory
+### apply — 生成 skill / 配置 hook / 更新 memory
 
 确认 extract 结果后运行，将候选转化为实际文件。
 
@@ -230,13 +245,25 @@ AI 在生成候选前会对每个模式做三问过滤，**以下类型不会进
 /self-distill apply
 ```
 
-AI 读取最新的 `_extract_*.md`，列出所有候选，你选择要生成哪些（输入编号或"全部"）。
+AI 读取最新的 `_extract_*.md`，列出所有 ❌ Pending 候选，你选择要落地哪些（输入编号或"全部"）。
 
 #### skill 生成
 
 AI 使用内置流程起草 SKILL.md，**先展示内容让你确认，再写入文件。**
 
 生成的 skill 写入：`~/.claude/skills/<skill-name>/SKILL.md`
+
+#### hook 候选处理
+
+extract 中识别为"应自动触发"的模式会单独列出，展示建议的 hook 配置（触发事件 + 命令），由你决定是否写入 `~/.claude/settings.json`：
+
+```
+以下模式建议配置为 hook，是否写入 settings.json？
+- Hook #1: 每次对话结束时检查 PLAN.md 是否需要更新（Stop 事件）
+  命令：f=$(find . -maxdepth 3 -name 'PLAN.md' -print -quit 2>/dev/null); ...
+```
+
+> ⚠️ hook 写入需在非 auto 模式下执行；如受权限限制，AI 会展示 JSON 让你手动粘贴。
 
 #### memory 候选处理
 

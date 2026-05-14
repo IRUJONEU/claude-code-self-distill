@@ -35,8 +35,8 @@ You decide which sessions are worth archiving. The AI finds the patterns in thos
 
 - **Near-zero token record**: Archiving is done by a script that directly parses Claude Code's native JSONL files — almost no token cost, safe to call even at 95% context usage
 - **Positive/negative tagging**: Mark sessions with `--positive` / `--negative` when recording; negative sessions (with correction behavior) get higher weight in analysis — the most direct signal for skill needs
-- **Three-question filter**: Before generating candidates, extract automatically filters out "things Claude already knows" and "one-off needs" — only patterns worth solidifying remain
-- **Skill + memory dual output**: Behavior preference candidates don't get forced into skills; instead, they're suggested for memory, confirmed by you
+- **Four-question filter**: Before generating candidates, extract automatically filters out "things Claude already knows" and "one-off needs", and distinguishes hook candidates (need system-level auto-triggering) from memory candidates (behavior preferences) — only patterns that genuinely need a skill reach the skill candidate list
+- **Skill + hook + memory triple output**: Behavior preference candidates are suggested for memory; patterns that need to fire on system events are suggested as hooks; all confirmed by you before being written
 
 ---
 
@@ -44,7 +44,7 @@ You decide which sessions are worth archiving. The AI finds the patterns in thos
 
 | ✅ Is | ❌ Is not |
 |------|--------|
-| Helps you discover what skills or memory you need | Writes a specific skill for you |
+| Helps you discover what skills, hooks, or memory you need | Writes a specific skill for you |
 | Cross-conversation pattern mining | Fully automatic, no intervention needed |
 | Semi-automatic, user-driven filtering | Only outputs skills |
 
@@ -61,8 +61,8 @@ archiving               ↓                            ↓
                                         full candidate list (sorted by demand strength)
                                                     ↓
                                                [apply]
-                                          ↙            ↘
-                                   generate skill   write to memory
+                                      ↙            ↓            ↘
+                               generate skill  configure hook  write to memory
 ```
 
 Three commands form a closed loop. Each step can be used independently.
@@ -167,31 +167,44 @@ Use `--input` to import existing conversations directly (Claude.ai exports, manu
 
 #### How extract filters candidates
 
-Before generating candidates, the AI applies a three-question filter. **The following types are excluded:**
+Before generating candidates, the AI applies a **four-question filter**, evaluated in order:
 
-1. **Things Claude already knows** (general programming, standard tool usage, etc.) → no skill needed
-2. **One-off needs** (tightly bound to a specific project, won't recur) → not worth solidifying
-3. **Behavior preferences** (constraints like "don't add unnecessary comments") → better suited for memory, listed separately
+1. **Things Claude already knows** (general programming, standard tool usage, etc.) → discard, no skill needed
+2. **One-off needs** (tightly bound to a specific project, won't recur) → discard, not worth solidifying
+3. **Behavior preferences** (constraints like "don't add unnecessary comments") → classified as **memory candidate**, listed separately
+4. **Should auto-trigger rather than rely on AI judgment** (e.g. "remind me to update PLAN.md after every session") → classified as **hook candidate**, listed separately
 
-#### Incremental tracking
+Hook candidate signals: a memory that exists but repeatedly fails to trigger proactively, or corrections that are about "forgetting to do" rather than "doing it wrong."
 
-Before each extract run, the AI compares the existing `_extract_*.md` against current archives and only processes new sessions, reporting: "X total sessions, Y already processed, Z new."
+#### Incremental tracking and apply-state awareness
 
-This design prevents context from blowing up as archives accumulate — re-reading all sessions every time would grow linearly and quickly hit limits. In incremental mode, the AI only reads the small batch of new sessions; previous analysis is read from `_extract_*.md` and merged in. New evidence strengthens existing candidates, new patterns are appended, and nothing from prior runs is lost.
+Before each extract run, the AI:
+1. Compares the existing `_extract_*.md` against current archives and only processes new sessions, reporting: "X total sessions, Y already processed, Z new"
+2. Scans current applied state (`~/.claude/skills/`, `~/.claude/memory/`, hooks in `settings.json`) and marks each candidate `[✅ Applied]` / `[❌ Pending]` — so already-completed candidates don't show up as pending again
 
 #### Output format
 
-All candidates that pass the three-question filter are **kept in full**, sorted by demand strength — no arbitrary cutoff, every valid finding is preserved.
+All candidates that pass the four-question filter are **kept in full**, sorted by demand strength. Three candidate types each get their own section, all with apply-state labels:
 
 ```
-## Skill Candidate #N: <name>
+## Skill Candidate #N: <name> [✅ Applied / ❌ Pending]
 - Trigger: when do you repeatedly need this
 - Core content: what should this skill tell the AI
 - Evidence: which sessions it appeared in (date + topic)
 - Demand strength: ★★★☆☆
+
+## Hook Candidate #N: <name> [✅ Applied / ❌ Pending]
+- Trigger event: Stop / PostToolUse / SessionStart / ...
+- Core behavior: what the hook should do automatically
+- Why hook and not memory: ...
+- Demand strength: ★★★☆☆
+
+## Memory Candidate #N: <name> [✅ Applied / ❌ Pending]
+- Behavior preference: how the AI should treat you
+- Demand strength: ★★★☆☆
 ```
 
-Results are saved to `~/.claude/distill-logs/_extract_YYYY-MM-DD.md`, containing: Skill candidates, Memory candidates, and **Analysis Notes** (the AI's reasoning about classification decisions, boundary judgments, and why certain patterns were filtered). Multiple runs **merge and update** — historical evidence is never lost.
+Results are saved to `~/.claude/distill-logs/_extract_YYYY-MM-DD.md`, containing: Skill / Hook / Memory candidate lists, **Analysis Notes** (the AI's reasoning about classification decisions), and structured `applied` / `pending` fields in frontmatter. Multiple runs **merge and update** — historical evidence is never lost.
 
 #### Example output
 
@@ -216,12 +229,12 @@ Real output from running extract on 17 archived sessions:
 > | 4 | Skip obvious confirmations — act when intent is clear | ★★☆☆☆ | 1 session (correction) |
 > | 5 | Always reply in Chinese — don't switch because logs/code are in another language | ★★☆☆☆ | 2 sessions (correction) |
 >
-> 1 skill candidate + 5 memory candidates.
-> Proceed to \[apply\] to generate SKILL.md / write to memory?
+> 1 skill candidate + 1 hook candidate + 5 memory candidates.
+> Proceed to \[apply\] to generate SKILL.md / configure hook / write to memory?
 
 ---
 
-### apply — generate skills or update memory
+### apply — generate skills / configure hooks / update memory
 
 Run after confirming extract results, to turn candidates into actual files.
 
@@ -229,13 +242,25 @@ Run after confirming extract results, to turn candidates into actual files.
 /self-distill apply
 ```
 
-The AI reads the latest `_extract_*.md`, lists all candidates, and you choose which ones to generate (enter numbers or "all").
+The AI reads the latest `_extract_*.md`, lists all ❌ Pending candidates, and you choose which ones to apply (enter numbers or "all").
 
 #### Skill generation
 
 The AI uses a built-in process to draft the SKILL.md, and **shows you the content for confirmation before writing any files.**
 
 Generated skills are written to: `~/.claude/skills/<skill-name>/SKILL.md`
+
+#### Hook candidate handling
+
+Patterns identified as "should auto-trigger" in extract are listed separately, with a suggested hook configuration (trigger event + command). You decide whether to write them to `~/.claude/settings.json`:
+
+```
+The following patterns are suggested as hooks. Add to settings.json?
+- Hook #1: check if PLAN.md needs updating after each session (Stop event)
+  command: f=$(find . -maxdepth 3 -name 'PLAN.md' -print -quit 2>/dev/null); ...
+```
+
+> ⚠️ Writing hooks requires non-auto mode; if blocked by permissions, the AI will show the JSON for you to paste manually.
 
 #### Memory candidate handling
 

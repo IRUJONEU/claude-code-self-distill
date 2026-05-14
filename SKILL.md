@@ -112,6 +112,24 @@ disable-model-invocation: false
 
    若新 session = 0，提示用户：「所有记录已在上次提炼中处理。是否重新全量分析？」，等待确认后再继续。
 
+2b. **apply 状态扫描：确定哪些候选已经落地**
+
+   在分析开始之前，扫描当前已有的 apply 状态，供步骤 5 候选标注使用：
+
+   ```bash
+   # 已有 skill
+   ls ~/.claude/skills/
+
+   # 已有 memory（排除 MEMORY.md）
+   ls ~/.claude/memory/ | grep -v MEMORY.md
+
+   # 已有 hook（提取 event + command 前60字符）
+   jq -r '.hooks // {} | to_entries[] | "\(.key): \(.value[0].hooks[0].command[:60])..."' \
+     ~/.claude/settings.json 2>/dev/null
+   ```
+
+   将扫描结果记为 **apply_state**，在步骤 5 输出候选时逐项标注 `[✅ Applied]` / `[❌ Pending]`。
+
 3. **一次调用脚本，生成所有 batch 文件**
 
    默认模式（不带 `--full`）——**单次脚本调用**，脚本负责切分：
@@ -157,20 +175,45 @@ disable-model-invocation: false
    | 不需要 skill 也能做好？ | Claude 本身已具备此领域知识（通用编程、工具使用、标准流程） | 丢弃 |
    | 一次性需求？ | 与当前特定项目强绑定，完成后不会复现 | 丢弃 |
    | 更符合 memory/偏好？ | 不是流程，而是"AI 应该如何对待你"的行为偏好或约束 | 分类为 **memory 候选** |
+   | 更适合作为 hook？ | 行为应在某个系统事件（工具调用、session 结束、文件保存）上**自动触发**，而非依赖 AI 在对话中主动判断 | 分类为 **hook 候选** |
 
-   memory 候选不生成 skill，在步骤 7 后单独列出，apply 阶段由用户决定是否写入 memory。
+   hook 候选的典型特征：
+   - 用户说过"每次...之后"、"每当...就..."、"每次对话结束时"
+   - 某条 memory 长期存在但反复失效（说明 AI 无法自主触发，需要系统层）
+   - 纠正的是"忘记做"而不是"做错了"
+
+   memory 候选不生成 skill，hook 候选不生成 skill，两者在步骤 7 后单独列出，apply 阶段由用户决定是否落地。
 
 5. **生成全量候选列表（按需求强度排序）**
 
-   保留所有通过三问过滤的候选，不截断。按需求强度降序排列：
+   保留所有通过过滤的候选，不截断。使用 apply_state 标注每项落地状态。按需求强度降序排列：
+
+   **Skill 候选格式**：
    ```
-   ## Skill 候选 #N: <候选名>
+   ## Skill 候选 #N: <候选名> [✅ Applied / ❌ Pending]
    - 触发场景：你在什么情况下反复需要这个
    - 核心内容：这个 skill 应该告诉 AI 什么
    - 证据来源：出现在哪几个 session（日期 + topic）
    - 需求强度：★★★☆☆（频次 / 跨 session 数）
    ```
-   Memory 候选同样全量保留，单独成节，同样按需求强度排序。
+
+   **Hook 候选格式**（单独成节，在 Skill 候选之后）：
+   ```
+   ## Hook 候选 #N: <候选名> [✅ Applied / ❌ Pending]
+   - 触发事件：Stop / PostToolUse(Write|Edit) / SessionStart / ...
+   - 核心行为：hook 应自动做什么（一句话）
+   - 为什么是 hook 而不是 memory：...
+   - 证据来源：出现在哪几个 session（日期 + topic）
+   - 需求强度：★★★☆☆（频次 / 跨 session 数）
+   ```
+
+   **Memory 候选格式**（单独成节，在 Hook 候选之后）：
+   ```
+   ## Memory 候选 #N: <候选名> [✅ Applied / ❌ Pending]
+   - 行为偏好：AI 应该如何对待你
+   - 证据来源：出现在哪几个 session（日期 + topic）
+   - 需求强度：★★★☆☆（频次 / 跨 session 数）
+   ```
 
 6. **保存/输出提炼结果**
 
@@ -179,10 +222,22 @@ disable-model-invocation: false
    ~/.claude/distill-logs/_extract_<YYYY-MM-DD>.md
    ```
    文件结构：
-   - frontmatter：更新 `processed_sessions`（完整列表）
-   - **Analysis Notes 节**：记录 AI 在本次分析中的关键推理——为什么某些模式被归为 skill vs memory vs 丢弃，跨 batch 观察到的规律，值得注意的边界判断。这是蒸馏记录的核心，供后续 extract 参考。
-   - Skill 候选全量列表（按需求强度排序）
-   - Memory 候选全量列表（按需求强度排序）
+   - frontmatter：更新 `processed_sessions`（完整列表）+ 结构化 apply 状态：
+     ```yaml
+     hook_candidates: <数量>
+     applied:
+       skills: [...]
+       memories: [...]
+       hooks: [...]
+     pending:
+       skills: [...]
+       memories: [...]
+       hooks: [...]
+     ```
+   - **Analysis Notes 节**：记录 AI 在本次分析中的关键推理——为什么某些模式被归为 skill vs memory vs hook vs 丢弃，跨 batch 观察到的规律，值得注意的边界判断。这是蒸馏记录的核心，供后续 extract 参考。
+   - Skill 候选全量列表（按需求强度排序，含 ✅/❌ 标注）
+   - Hook 候选全量列表（按需求强度排序，含 ✅/❌ 标注）
+   - Memory 候选全量列表（按需求强度排序，含 ✅/❌ 标注）
    - 过滤说明（被丢弃的模式及原因）
    - 历史合并记录（如有旧 `_extract_` 合并时的变化）
 
@@ -192,7 +247,7 @@ disable-model-invocation: false
    提示用户复制保存。下次 extract 时可通过 `--input` 传入旧报告，实现增量累积。
 
 7. **询问用户**：
-   > "以上是从 X 条对话记录中蒸馏出的全量候选（N 个 skill，M 个 memory）。你想修改某个候选的描述，还是直接进入 [apply] 生成 SKILL.md？Memory 候选也可以在 apply 阶段确认写入。"
+   > "以上是从 X 条对话记录中蒸馏出的全量候选（N 个 skill，K 个 hook，M 个 memory）。你想修改某个候选的描述，还是直接进入 [apply]？Hook 候选需写入 `~/.claude/settings.json`，Memory 候选写入 `~/.claude/memory/`，均在 apply 阶段确认。"
 
 ---
 
@@ -210,8 +265,12 @@ disable-model-invocation: false
    ```
    **Web 环境**：使用本次对话中 extract 输出的候选列表，或请用户粘贴之前保存的提炼报告
 
-2. **确认要生成哪些 skill**
-   - 如果用户没有指定，列出所有候选，请用户选择（输入编号或 "全部"）
+2. **确认要生成哪些 skill / hook / memory**
+   - 如果用户没有指定，列出所有 ❌ Pending 候选，请用户选择（输入编号或 "全部"）
+   - 如果提炼结果中有 **hook 候选**，单独列出并询问：
+     > "以下模式建议配置为 hook，自动在系统事件时触发，是否写入 `~/.claude/settings.json`？"
+     > [列出 hook 候选，展示建议的 JSON 配置（event + command），用户确认后写入]
+     > ⚠️ hook 写入需在非 auto 模式下执行，或由用户手动粘贴 JSON；如当前受 auto 权限限制，直接展示 JSON 让用户自行写入。
    - 如果提炼结果中有 **memory 候选**，单独列出并询问：
      > "以下模式更适合写入 memory 而非 skill，是否添加到 `~/.claude/memory/`？"
      > [列出 memory 候选，用户确认后写入]
