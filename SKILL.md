@@ -127,6 +127,9 @@ After output, prompt:
    # Existing hooks (event + first 60 chars of command)
    jq -r '.hooks // {} | to_entries[] | "\(.key): \(.value[0].hooks[0].command[:60])..."' \
      ~/.claude/settings.json 2>/dev/null
+
+   # Existing CLAUDE.md sections
+   grep -n "^##" ~/.claude/CLAUDE.md 2>/dev/null
    ```
 
    Record the scan result as **apply_state**, used in step 5 to label each candidate `[✅ Applied]` / `[❌ Pending]`.
@@ -167,9 +170,9 @@ After output, prompt:
    - Correction behavior in negative sessions gets weight ×1.5 (from frontmatter `sentiment: negative`)
    - Calculate **demand strength = frequency × cross-session rate**
 
-4.5. **Candidate quality filter (four-question check)**
+4.5. **Candidate quality filter (five-question check)**
 
-   For each aggregated pattern, ask four questions in order. Answer "yes" to any one and the pattern exits the skill candidate path:
+   For each aggregated pattern, ask five questions in order. Answer "yes" to any one and the pattern exits the skill candidate path:
 
    | Question | Criterion | Action |
    |----------|-----------|--------|
@@ -177,17 +180,20 @@ After output, prompt:
    | Is this a one-off need? | Tightly bound to a specific current project, will not recur after completion | Discard |
    | Better suited for memory/preferences? | Not a workflow, but a behavioral preference about "how the AI should treat you" | Classify as **memory candidate** |
    | Better suited as a hook? | The behavior should **auto-trigger** on a system event (tool call, session end, file save) rather than rely on the AI to judge and initiate mid-conversation | Classify as **hook candidate** |
+   | Better suited for CLAUDE.md? | An always-active global behavioral rule — project-agnostic, session-independent, applies unconditionally across all contexts, and feels more like a hard constraint than a soft preference | Classify as **CLAUDE.md candidate** |
 
    Typical hook candidate signals:
    - User said "every time after X", "whenever X happens", "at the end of every session"
    - A memory entry that exists long-term but repeatedly fails to trigger proactively (AI remembers it but never initiates it)
    - The correction was about "forgetting to do" something, not "doing it wrong"
 
-   Neither memory nor hook candidates generate skills. Both are listed separately after step 7; the user decides in the apply phase whether to write them.
+   Memory vs CLAUDE.md distinction: memory entries are behavior preferences that the AI should follow when relevant ("don't add unnecessary comments"); CLAUDE.md entries are unconditional hard rules that always apply ("never auto-push to remote").
+
+   None of the memory, hook, or CLAUDE.md candidates generate skills. All three are listed separately after step 7; the user decides in the apply phase whether to write them.
 
 5. **Generate full candidate list (sorted by demand strength)**
 
-   Keep all candidates that pass the four-question filter, no truncation. Use apply_state to label each item. Sort by demand strength descending. Each type gets its own section:
+   Keep all candidates that pass the five-question filter, no truncation. Use apply_state to label each item. Sort by demand strength descending. Each type gets its own section:
 
    **Skill candidate format**:
    ```
@@ -216,6 +222,15 @@ After output, prompt:
    - Demand strength: ★★★☆☆ (frequency / session count)
    ```
 
+   **CLAUDE.md candidate format** (separate section, after Memory candidates):
+   ```
+   ## CLAUDE.md Candidate #N: <name> [✅ Applied / ❌ Pending]
+   - Global rule: what always-active constraint this enforces
+   - Why CLAUDE.md and not memory: session-independent, project-agnostic hard rule
+   - Evidence: which sessions it appeared in (date + topic)
+   - Demand strength: ★★★☆☆ (frequency / session count)
+   ```
+
 6. **Save / output results**
 
    **Claude Code environment**: write to file
@@ -226,19 +241,23 @@ After output, prompt:
    - frontmatter: update `processed_sessions` (complete list) + structured apply state:
      ```yaml
      hook_candidates: <count>
+     claude_md_candidates: <count>
      applied:
        skills: [...]
        memories: [...]
        hooks: [...]
+       claude_md: [...]
      pending:
        skills: [...]
        memories: [...]
        hooks: [...]
+       claude_md: [...]
      ```
-   - **Analysis Notes section**: record key AI reasoning from this run — why certain patterns were classified as skill vs memory vs hook vs discarded, cross-batch observations, notable boundary judgments. This is the core of the distillation record, referenced by future extract runs.
+   - **Analysis Notes section**: record key AI reasoning from this run — why certain patterns were classified as skill vs memory vs hook vs CLAUDE.md vs discarded, cross-batch observations, notable boundary judgments. This is the core of the distillation record, referenced by future extract runs.
    - Skill candidates full list (sorted by demand strength, with ✅/❌ labels)
    - Hook candidates full list (sorted by demand strength, with ✅/❌ labels)
    - Memory candidates full list (sorted by demand strength, with ✅/❌ labels)
+   - CLAUDE.md candidates full list (sorted by demand strength, with ✅/❌ labels)
    - Filter explanation (discarded patterns and reasons)
    - Merge history (changes when merging with old `_extract_`)
 
@@ -248,7 +267,7 @@ After output, prompt:
    Prompt the user to copy and save it. Pass the old report via `--input` next time for incremental accumulation.
 
 7. **Ask the user**:
-   > "These are the full candidates distilled from X archived sessions (N skills, K hooks, M memory). Would you like to edit a candidate's description, or proceed to [apply]? Hook candidates need to be written to `~/.claude/settings.json`; memory candidates go to `~/.claude/memory/` — both are confirmed in the apply phase."
+   > "These are the full candidates distilled from X archived sessions (N skills, K hooks, M memory, P CLAUDE.md). Would you like to edit a candidate's description, or proceed to [apply]? Hook candidates need to be written to `~/.claude/settings.json`; memory candidates go to `~/.claude/memory/`; CLAUDE.md candidates go to `~/.claude/CLAUDE.md` — all confirmed in the apply phase."
 
 ---
 
@@ -275,6 +294,9 @@ After output, prompt:
    - If the extract results contain **memory candidates**, list them separately and ask:
      > "The following patterns are better suited for memory than skills. Add to `~/.claude/memory/`?"
      > [List memory candidates; write after user confirms]
+   - If the extract results contain **CLAUDE.md candidates**, list them separately and ask:
+     > "The following patterns are better suited for CLAUDE.md (hard rules, not preferences). Append to `~/.claude/CLAUDE.md`?"
+     > [List CLAUDE.md candidates; append as new section after user confirms]
 
 3. **Generate SKILL.md for each candidate**
 
