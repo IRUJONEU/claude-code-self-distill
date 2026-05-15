@@ -35,8 +35,8 @@ You decide which sessions are worth archiving. The AI finds the patterns in thos
 
 - **Near-zero token record**: Archiving is done by a script that directly parses Claude Code's native JSONL files — almost no token cost, safe to call even at 95% context usage
 - **Positive/negative tagging**: Mark sessions with `--positive` / `--negative` when recording; negative sessions (with correction behavior) get higher weight in analysis — the most direct signal for skill needs
-- **Four-question filter**: Before generating candidates, extract automatically filters out "things Claude already knows" and "one-off needs", and distinguishes hook candidates (need system-level auto-triggering) from memory candidates (behavior preferences) — only patterns that genuinely need a skill reach the skill candidate list
-- **Skill + hook + memory triple output**: Behavior preference candidates are suggested for memory; patterns that need to fire on system events are suggested as hooks; all confirmed by you before being written
+- **Five-question filter**: Before generating candidates, extract automatically filters out "things Claude already knows" and "one-off needs", and distinguishes hook candidates (need system-level auto-triggering), memory candidates (behavior preferences), and CLAUDE.md candidates (always-active global rules) — only patterns that genuinely need a skill reach the skill candidate list
+- **Skill + hook + memory + CLAUDE.md four outputs**: Behavior preference candidates are suggested for memory; patterns that need to fire on system events are suggested as hooks; always-active global behavioral rules are suggested for CLAUDE.md; all confirmed by you before being written
 
 ---
 
@@ -61,8 +61,8 @@ archiving               ↓                            ↓
                                         full candidate list (sorted by demand strength)
                                                     ↓
                                                [apply]
-                                      ↙            ↓            ↘
-                               generate skill  configure hook  write to memory
+                             ↙          ↓           ↓              ↘
+                       generate skill  configure hook  write to memory  write to CLAUDE.md
 ```
 
 Three commands form a closed loop. Each step can be used independently.
@@ -167,12 +167,13 @@ Use `--input` to import existing conversations directly (Claude.ai exports, manu
 
 #### How extract filters candidates
 
-Before generating candidates, the AI applies a **four-question filter**, evaluated in order:
+Before generating candidates, the AI applies a **five-question filter**, evaluated in order:
 
 1. **Things Claude already knows** (general programming, standard tool usage, etc.) → discard, no skill needed
 2. **One-off needs** (tightly bound to a specific project, won't recur) → discard, not worth solidifying
 3. **Behavior preferences** (constraints like "don't add unnecessary comments") → classified as **memory candidate**, listed separately
 4. **Should auto-trigger rather than rely on AI judgment** (e.g. "remind me to update PLAN.md after every session") → classified as **hook candidate**, listed separately
+5. **Always-active global behavioral rules** (universal, session-independent rules that apply regardless of project — harder rules than memory preferences, like "never auto-push to remote") → classified as **CLAUDE.md candidate**, listed separately
 
 Hook candidate signals: a memory that exists but repeatedly fails to trigger proactively, or corrections that are about "forgetting to do" rather than "doing it wrong."
 
@@ -184,7 +185,7 @@ Before each extract run, the AI:
 
 #### Output format
 
-All candidates that pass the four-question filter are **kept in full**, sorted by demand strength. Three candidate types each get their own section, all with apply-state labels:
+All candidates that pass the five-question filter are **kept in full**, sorted by demand strength. Four candidate types each get their own section, all with apply-state labels:
 
 ```
 ## Skill Candidate #N: <name> [✅ Applied / ❌ Pending]
@@ -202,9 +203,14 @@ All candidates that pass the four-question filter are **kept in full**, sorted b
 ## Memory Candidate #N: <name> [✅ Applied / ❌ Pending]
 - Behavior preference: how the AI should treat you
 - Demand strength: ★★★☆☆
+
+## CLAUDE.md Candidate #N: <name> [✅ Applied / ❌ Pending]
+- Global rule: what always-active constraint this enforces
+- Why CLAUDE.md and not memory: session-independent, project-agnostic hard rule
+- Demand strength: ★★★☆☆
 ```
 
-Results are saved to `~/.claude/distill-logs/_extract_YYYY-MM-DD.md`, containing: Skill / Hook / Memory candidate lists, **Analysis Notes** (the AI's reasoning about classification decisions), and structured `applied` / `pending` fields in frontmatter. Multiple runs **merge and update** — historical evidence is never lost.
+Results are saved to `~/.claude/distill-logs/_extract_YYYY-MM-DD.md`, containing: Skill / Hook / Memory / CLAUDE.md candidate lists, **Analysis Notes** (the AI's reasoning about classification decisions), and structured `applied` / `pending` fields in frontmatter. Multiple runs **merge and update** — historical evidence is never lost.
 
 #### Example output
 
@@ -274,6 +280,19 @@ Add to ~/.claude/memory/?
 ```
 
 After confirmation, they are written to `~/.claude/memory/`, where Claude Code will automatically load them in future conversations.
+
+#### CLAUDE.md candidate handling
+
+Patterns identified as "always-active global rules" in extract are listed separately, and you decide whether to append them to `~/.claude/CLAUDE.md`:
+
+```
+The following patterns are better suited for CLAUDE.md than memory (hard rules, not preferences).
+Append to ~/.claude/CLAUDE.md?
+- Rule #1: never auto-push to remote — always wait for explicit user instruction
+- Rule #2: don't add Co-Authored-By to commits unless user explicitly requests it
+```
+
+After confirmation, they are appended to `~/.claude/CLAUDE.md` as a new section, taking effect in all future sessions across all projects.
 
 ---
 

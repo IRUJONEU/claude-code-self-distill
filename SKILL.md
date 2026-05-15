@@ -126,6 +126,9 @@ disable-model-invocation: false
    # 已有 hook（提取 event + command 前60字符）
    jq -r '.hooks // {} | to_entries[] | "\(.key): \(.value[0].hooks[0].command[:60])..."' \
      ~/.claude/settings.json 2>/dev/null
+
+   # 已有 CLAUDE.md 全局规范（列出各节标题，判断哪些内容已落地）
+   grep -n "^##" ~/.claude/CLAUDE.md 2>/dev/null
    ```
 
    将扫描结果记为 **apply_state**，在步骤 5 输出候选时逐项标注 `[✅ Applied]` / `[❌ Pending]`。
@@ -166,9 +169,9 @@ disable-model-invocation: false
    - negative session 中的纠正行为权重 ×1.5（来自 frontmatter `sentiment: negative`）
    - 计算**需求强度 = 频次 × 跨 session 率**
 
-4.5. **候选质量过滤（三问判断）**
+4.5. **候选质量过滤（五问判断）**
 
-   对每个聚合后的模式，依次问三个问题，任何一个为"是"则不进入 skill 候选：
+   对每个聚合后的模式，依次问五个问题，任何一个为"是"则不进入 skill 候选：
 
    | 问题 | 判断标准 | 处理 |
    |------|---------|------|
@@ -176,13 +179,18 @@ disable-model-invocation: false
    | 一次性需求？ | 与当前特定项目强绑定，完成后不会复现 | 丢弃 |
    | 更符合 memory/偏好？ | 不是流程，而是"AI 应该如何对待你"的行为偏好或约束 | 分类为 **memory 候选** |
    | 更适合作为 hook？ | 行为应在某个系统事件（工具调用、session 结束、文件保存）上**自动触发**，而非依赖 AI 在对话中主动判断 | 分类为 **hook 候选** |
+   | 应写入 CLAUDE.md？ | 是**始终生效的全局行为规范**——与项目无关、跨所有 session 适用、不依赖上下文触发，且比 memory 更像"硬规则"而非"偏好" | 分类为 **CLAUDE.md 候选** |
 
    hook 候选的典型特征：
    - 用户说过"每次...之后"、"每当...就..."、"每次对话结束时"
    - 某条 memory 长期存在但反复失效（说明 AI 无法自主触发，需要系统层）
    - 纠正的是"忘记做"而不是"做错了"
 
-   memory 候选不生成 skill，hook 候选不生成 skill，两者在步骤 7 后单独列出，apply 阶段由用户决定是否落地。
+   CLAUDE.md 候选与 memory 候选的区分：
+   - memory：上下文相关、可能随项目/时期变化的偏好（"这段时间我在做 X 项目"）
+   - CLAUDE.md：普适规范，任何项目任何时候都适用（"任务启动时先建立共识"）
+
+   memory 候选、hook 候选、CLAUDE.md 候选均不生成 skill，三者在步骤 7 后单独列出，apply 阶段由用户决定是否落地。
 
 5. **生成全量候选列表（按需求强度排序）**
 
@@ -215,6 +223,15 @@ disable-model-invocation: false
    - 需求强度：★★★☆☆（频次 / 跨 session 数）
    ```
 
+   **CLAUDE.md 候选格式**（单独成节，在 Memory 候选之后）：
+   ```
+   ## CLAUDE.md 候选 #N: <候选名> [✅ Applied / ❌ Pending]
+   - 全局规范：应写入 CLAUDE.md 的行为规则（一句话概括）
+   - 建议写法：<具体添加到 CLAUDE.md 的文字>
+   - 证据来源：出现在哪几个 session（日期 + topic）
+   - 需求强度：★★★☆☆（频次 / 跨 session 数）
+   ```
+
 6. **保存/输出提炼结果**
 
    **Claude Code 环境**：写入文件
@@ -238,6 +255,7 @@ disable-model-invocation: false
    - Skill 候选全量列表（按需求强度排序，含 ✅/❌ 标注）
    - Hook 候选全量列表（按需求强度排序，含 ✅/❌ 标注）
    - Memory 候选全量列表（按需求强度排序，含 ✅/❌ 标注）
+   - CLAUDE.md 候选全量列表（按需求强度排序，含 ✅/❌ 标注）
    - 过滤说明（被丢弃的模式及原因）
    - 历史合并记录（如有旧 `_extract_` 合并时的变化）
 
@@ -247,7 +265,7 @@ disable-model-invocation: false
    提示用户复制保存。下次 extract 时可通过 `--input` 传入旧报告，实现增量累积。
 
 7. **询问用户**：
-   > "以上是从 X 条对话记录中蒸馏出的全量候选（N 个 skill，K 个 hook，M 个 memory）。你想修改某个候选的描述，还是直接进入 [apply]？Hook 候选需写入 `~/.claude/settings.json`，Memory 候选写入 `~/.claude/memory/`，均在 apply 阶段确认。"
+   > "以上是从 X 条对话记录中蒸馏出的全量候选（N 个 skill，K 个 hook，M 个 memory，P 个 CLAUDE.md 规范）。你想修改某个候选的描述，还是直接进入 [apply]？Hook 候选需写入 `~/.claude/settings.json`，Memory 候选写入 `~/.claude/memory/`，CLAUDE.md 候选追加到 `~/.claude/CLAUDE.md`，均在 apply 阶段确认。"
 
 ---
 
@@ -265,7 +283,7 @@ disable-model-invocation: false
    ```
    **Web 环境**：使用本次对话中 extract 输出的候选列表，或请用户粘贴之前保存的提炼报告
 
-2. **确认要生成哪些 skill / hook / memory**
+2. **确认要生成哪些 skill / hook / memory / CLAUDE.md 规范**
    - 如果用户没有指定，列出所有 ❌ Pending 候选，请用户选择（输入编号或 "全部"）
    - 如果提炼结果中有 **hook 候选**，单独列出并询问：
      > "以下模式建议配置为 hook，自动在系统事件时触发，是否写入 `~/.claude/settings.json`？"
@@ -274,6 +292,9 @@ disable-model-invocation: false
    - 如果提炼结果中有 **memory 候选**，单独列出并询问：
      > "以下模式更适合写入 memory 而非 skill，是否添加到 `~/.claude/memory/`？"
      > [列出 memory 候选，用户确认后写入]
+   - 如果提炼结果中有 **CLAUDE.md 候选**，单独列出并询问：
+     > "以下模式建议作为全局规范写入 `~/.claude/CLAUDE.md`，是否追加？"
+     > [列出 CLAUDE.md 候选，展示建议写法，用户确认后追加到 CLAUDE.md 对应章节]
 
 3. **生成每个候选的 SKILL.md**
 
